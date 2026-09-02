@@ -22,6 +22,7 @@ import requests
 from config import settings
 from database import db
 from ai_handler import ai_handler
+import targets_loader
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,17 @@ class MetaHandler:
     def __init__(self) -> None:
         self.access_token = settings.meta_access_token
         self.api_version = settings.meta_api_version
-        self.facebook_page_ids = settings.facebook_page_ids
-        self.instagram_business_ids = settings.instagram_business_ids
+        # Merge discovered targets (targets.json) with any .env overrides.
+        self.facebook_page_ids = targets_loader.get_merged_facebook_page_ids()
+        self.instagram_business_ids = (
+            targets_loader.get_merged_instagram_business_ids()
+        )
         self.max_items = settings.max_comments_per_cycle
+        # Optional cap on how many targets to actually monitor this cycle.
+        self.max_targets = settings.max_targets_per_platform
+        if self.max_targets:
+            self.facebook_page_ids = self.facebook_page_ids[: self.max_targets]
+            self.instagram_business_ids = self.instagram_business_ids[: self.max_targets]
 
     # ------------------------------------------------------------------ #
     # Helpers

@@ -24,6 +24,7 @@ import requests
 from config import settings
 from database import db
 from ai_handler import ai_handler
+import targets_loader
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +38,18 @@ class YouTubeHandler:
 
     def __init__(self) -> None:
         self.api_key = settings.youtube_api_key
-        self.video_ids = settings.youtube_video_ids
+        # Merge discovered targets (targets.json) with any .env overrides.
+        self.video_ids = targets_loader.get_merged_youtube_video_ids()
+        # Discovered channels whose recent uploads we also monitor.
+        self.channel_ids = targets_loader.get_merged_youtube_channel_ids()
         # OAuth token used only for posting replies (comments.insert).
         self.oauth_token = settings.youtube_oauth_token
         self.max_items = settings.max_comments_per_cycle
+        # Optional cap on how many targets to actually monitor this cycle.
+        self.max_targets = settings.max_targets_per_platform
+        if self.max_targets:
+            self.video_ids = self.video_ids[: self.max_targets]
+            self.channel_ids = self.channel_ids[: self.max_targets]
 
     # ------------------------------------------------------------------ #
     # Fetching
@@ -63,8 +72,21 @@ class YouTubeHandler:
             logger.warning("YouTube API key missing; skipping fetch.")
             return []
 
+        # Build the set of video IDs to monitor: direct video targets plus the
+        # recent uploads of discovered channels.
+        video_ids = list(self.video_ids)
+        for channel_id in self.channel_ids:
+            try:
+                uploads = self._fetch_channel_uploads(channel_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("YouTube channel uploads failed for %s: %s", channel_id, exc)
+                continue
+            for vid in uploads:
+                if vid not in video_ids:
+                    video_ids.append(vid)
+
         items: List[dict] = []
-        for video_id in self.video_ids:
+        for video_id in video_ids:
             try:
                 comments = self._fetch_comments_for_video(video_id)
             except Exception as exc:  # noqa: BLE001
@@ -90,6 +112,47 @@ class YouTubeHandler:
                 if len(items) >= self.max_items:
                     return items
         return items
+
+    def _fetch_channel_uploads(self, channel_id: str) -> List[str]:
+        """
+        Fetch the most recent video IDs uploaded by a channel.
+        Uses the channel's uploads playlist (contentDetails.relatedPlaylists.uploads).
+        """
+        # 1) Resolve the uploads playlist id for the channel.
+        params = {
+            "part": "contentDetails",
+            "id": channel_id,
+            "key": self.api_key,
+        }
+        resp = requests.get(f"{API_BASE}/channels", params=params, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        items = data.get("items", [])
+        if not items:
+            return []
+        uploads_playlist = (
+            items[0].get("contentDetails", {})
+            .get("relatedPlaylists", {})
+            .get("uploads")
+        )
+        if not uploads_playlist:
+            return []
+
+        # 2) Fetch recent videos from that uploads playlist.
+        params = {
+            "part": "contentDetails",
+            "playlistId": uploads_playlist,
+            "maxResults": min(10, self.max_items),
+            "key": self.api_key,
+        }
+        resp = requests.get(f"{API_BASE}/playlistItems", params=params, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        return [
+            item.get("contentDetails", {}).get("videoId")
+            for item in data.get("items", [])
+            if item.get("contentDetails", {}).get("videoId")
+        ]
 
     def _fetch_comments_for_video(self, video_id: str) -> List[dict]:
         """Fetch top-level comments for a single video (paginated, capped)."""

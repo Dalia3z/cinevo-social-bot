@@ -29,6 +29,9 @@ cinevo-social-bot/
 ├── config.py                # إدارة مفاتيح البيئة والتوكنات
 ├── database.py              # إدارة SQLite لمنع تكرار الردود
 ├── ai_handler.py            # تكامل DeepSeek وتوليد الردود
+├── discover_targets.py      # سكريبت اكتشاف معرّفات الأفلام/المسلسلات
+├── targets_loader.py        # قراءة/إدارة ملف الأهداف targets.json
+├── targets.json             # تخزين المعرّفات المكتشفة (مقسّم ومنظّم)
 ├── requirements.txt         # مكتبات بايثون المطلوبة
 ├── ecosystem.config.js      # تشغيل PM2
 ├── cinevo-bot.service       # (بديل) خدمة systemd
@@ -121,18 +124,64 @@ pm2 stop cinevo-bot        # إيقاف البوت
 
 ---
 
+## 🔍 اكتشاف الأهداف تلقائياً (Movies & TV IDs)
+
+بدلاً من إدخال آلاف المعرّفات يدوياً في `.env`، استخدم سكريبت
+[`discover_targets.py`](discover_targets.py) الذي يجلب معرّفات القنوات
+والمقاطع (YouTube) والصفحات/المجتمعات (Meta) المتعلقة بالأفلام والمسلسلات.
+
+### لماذا ملف `targets.json` منفصل؟
+وضع 10,000 معرّف داخل سطر واحد في `.env` سيضخّم الملف ويعطّله. لذلك يُحفظ
+الاكتشاف في ملف JSON مقسّم ومنظّم، ويقرأه البوت عبر
+[`targets_loader.py`](targets_loader.py) بسلاسة.
+
+### التشغيل
+
+```bash
+# اكتشاف يوتيوب فقط (حتى 10,000 عنصر)
+python discover_targets.py --platform youtube --max 10000
+
+# اكتشاف ميتا فقط
+python discover_targets.py --platform meta
+
+# اكتشاف الكل
+python discover_targets.py --all --max 10000
+
+# تجربة بدون حفظ (فحص فقط)
+python discover_targets.py --dry-run
+```
+
+### ماذا يفعل السكريبت؟
+1. **يوتيوب**: يستخدم YouTube Data API v3 مع استعلامات ديناميكية متعددة
+   (مراجعة أفلام، ملخصات، شرح النهايات، أفضل الأفلام...) ويصفح النتائج حتى
+   يصل للحد المطلوب، جامعاً معرّفات القنوات والمقاطع.
+2. **ميتا**: يبحث في صفحات/مجتمعات السينما والترفيه عبر Graph API.
+3. **التخزين**: يحفظ النتائج في [`targets.json`](targets.json) بهيكل مقسّم:
+   `meta` (بيانات وصفية) / `youtube.channels` / `youtube.videos` /
+   `facebook.facebook_pages` / `facebook.instagram_business`.
+4. **تحديث `.env`**: يضبط `TARGETS_FILE=targets.json` ويفرّغ القوائم المضمّنة
+   سابقاً ليجعل ملف JSON هو المصدر الوحيد.
+
+> **ملاحظة**: بدون `YOUTUBE_API_KEY` أو `META_ACCESS_TOKEN`، يستخدم السكريبت
+> قوائم بذور (Seed) آمنة حتى يبقى خط الأنابيب يعمل، ثم يمكنك إعادة تشغيله
+> بالمفاتيح الحقيقية لتوسيع القائمة.
+
+---
+
 ## ⚙️ الإعداد لكل منصة
 
 ### YouTube Shorts
 - احصل على **API key** من Google Cloud Console (لقراءة التعليقات).
 - للنشر (الرد) تحتاج **OAuth 2.0 token** بصلاحية `youtube.force-ssl`.
-- ضع معرفات الفيديوهات في `YOUTUBE_VIDEO_IDS`.
+- شغّل [`discover_targets.py`](discover_targets.py) لاكتشاف القنوات/المقاطع،
+  أو ضع معرّفات يدوياً في `YOUTUBE_VIDEO_IDS` / `YOUTUBE_CHANNEL_IDS`.
 
 ### Facebook & Instagram (Meta Graph API)
 - أنشئ تطبيق Meta وأنشئ **Page access token** طويل الأمد.
 - الصلاحيات المطلوبة: `pages_manage_posts`, `pages_read_engagement`,
   `instagram_basic`, `instagram_manage_comments`.
-- ضع معرفات الصفحات وحسابات Instagram في `.env`.
+- شغّل [`discover_targets.py`](discover_targets.py) لاكتشاف الصفحات، أو ضع
+  معرّفات يدوياً في `FACEBOOK_PAGE_IDS` / `INSTAGRAM_BUSINESS_IDS`.
 
 ### TikTok
 - **ملاحظة مهمة**: واجهة TikTok العامة لقراءة/الرد على التعليقات غير متاحة

@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "generated_at": "2026-09-02 17:07:30",
+    "source": "discover_targets.py",
+    "note": ""
+  },
+  "youtube": {
+    "channels": [
+      {
+        "id": "UCXuqSBlHAEoXw8pI7trVUwA",
+        "title": "CinemaSeed1"
+      },
+      {
+        "id": "UCVgO39Bk5sMo66-6o6Spn6Q",
+        "title": "CinemaSeed2"
+      }
+    ],
+    "videos": []
+  },
+  "facebook": {
+    "facebook_pages": [
+      {
+        "id": "cinema",
+        "title": "Cinema (seed)"
+      },
+      {
+        "id": "movies",
+        "title": "Movies (seed)"
+      }
+    ],
+    "instagram_business": []
+  }
+}

@@ -101,6 +101,8 @@ class Settings:
     )
     # Comma separated list of video IDs (Shorts) to monitor.
     youtube_video_ids: List[str] = field(default_factory=list)
+    # Comma separated list of channel IDs to monitor (their recent uploads).
+    youtube_channel_ids: List[str] = field(default_factory=list)
     youtube_enabled: bool = field(
         default_factory=lambda: _get_bool("YOUTUBE_ENABLED", False)
     )
@@ -195,6 +197,18 @@ class Settings:
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state.db"),
         )
     )
+    # Path to the auto-discovered targets file (see targets_loader.py).
+    targets_file: str = field(
+        default_factory=lambda: os.getenv(
+            "TARGETS_FILE",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "targets.json"),
+        )
+    )
+    # Optional: cap on how many discovered targets the bot actually monitors.
+    # 0 (default) means "use all discovered targets".
+    max_targets_per_platform: int = field(
+        default_factory=lambda: _get_int("MAX_TARGETS_PER_PLATFORM", 0)
+    )
 
     # ------------------------------------------------------------------ #
     # Logging
@@ -213,6 +227,9 @@ class Settings:
         """Normalise list-typed fields after construction."""
         self.youtube_video_ids = self._split_list(
             os.getenv("YOUTUBE_VIDEO_IDS", "")
+        )
+        self.youtube_channel_ids = self._split_list(
+            os.getenv("YOUTUBE_CHANNEL_IDS", "")
         )
         self.facebook_page_ids = self._split_list(
             os.getenv("FACEBOOK_PAGE_IDS", "")
