@@ -1,0 +1,36 @@
+# cinevo-bot.service
+# ==================
+# Alternative to PM2: run the bot as a native systemd service on a Linux VPS.
+#
+# Installation:
+#   1. Edit the paths below (WorkingDirectory, ExecStart, User).
+#   2. sudo cp cinevo-bot.service /etc/systemd/system/
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable cinevo-bot
+#   5. sudo systemctl start cinevo-bot
+#
+# Useful commands:
+#   sudo systemctl status cinevo-bot
+#   sudo journalctl -u cinevo-bot -f
+#   sudo systemctl restart cinevo-bot
+
+[Unit]
+Description=Cinevo AI Social Media Engagement Bot
+After=network.target
+
+[Service]
+Type=simple
+# Change to the user that owns the project (avoid running as root).
+User=youruser
+# Absolute path to the project directory.
+WorkingDirectory=/home/youruser/cinevo-social-bot
+# Use the virtualenv python if you created one, e.g.:
+#   ExecStart=/home/youruser/cinevo-social-bot/venv/bin/python main.py
+ExecStart=/usr/bin/python3 main.py
+Restart=always
+RestartSec=10
+# Environment variables can also be loaded from a file:
+# EnvironmentFile=/home/youruser/cinevo-social-bot/.env
+
+[Install]
+WantedBy=multi-user.target

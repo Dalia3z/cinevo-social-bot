@@ -1,0 +1,28 @@
+# ============================================================================
+# Cinevo AI Social Media Engagement Bot - .gitignore
+# ============================================================================
+
+# Secrets - NEVER commit your real .env file
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# Runtime database & logs
+*.db
+*.db-wal
+*.db-shm
+logs/
+quora_queue/
+
+# PM2
+pm2-*.log
+*.pid
+
+# OS
+.DS_Store
+Thumbs.db

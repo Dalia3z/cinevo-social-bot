@@ -1,0 +1,19 @@
+# Cinevo AI Social Media Engagement Bot - Python dependencies
+#
+# Install with:  pip install -r requirements.txt
+
+# HTTP client used for all platform APIs and the DeepSeek API.
+requests>=2.31.0
+
+# Loads secrets from the .env file.
+python-dotenv>=1.0.0
+
+# Optional: official DeepSeek/OpenAI-compatible client.
+# The bot uses plain `requests` by default, but you can enable this if you
+# prefer the official client. Uncomment to install:
+# openai>=1.30.0
+
+# Optional: browser automation for TikTok/Quora (HIGH RISK, opt-in only).
+# Only needed if you set TIKTOK_BROWSER_AUTOMATION=true or
+# QUORA_BROWSER_AUTOMATION=true. Uncomment to install:
+# selenium>=4.20.0
