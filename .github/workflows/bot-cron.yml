@@ -65,11 +65,11 @@ jobs:
         run: |
           # BOT_ENABLED defaults to true so the bot actually runs.
           if [ -z "${BOT_ENABLED:-}" ]; then echo "BOT_ENABLED=true" >> "$GITHUB_ENV"; fi
-          # ACTIVE_PLATFORMS defaults to youtube,meta.
-          if [ -z "${ACTIVE_PLATFORMS:-}" ]; then echo "ACTIVE_PLATFORMS=youtube,meta" >> "$GITHUB_ENV"; fi
-          # Platform enable flags default to true if not set.
+          # ACTIVE_PLATFORMS defaults to youtube only (change this to add more).
+          if [ -z "${ACTIVE_PLATFORMS:-}" ]; then echo "ACTIVE_PLATFORMS=youtube" >> "$GITHUB_ENV"; fi
+          # Platform enable flags default to false unless explicitly enabled.
           if [ -z "${YOUTUBE_ENABLED:-}" ]; then echo "YOUTUBE_ENABLED=true" >> "$GITHUB_ENV"; fi
-          if [ -z "${META_ENABLED:-}" ]; then echo "META_ENABLED=true" >> "$GITHUB_ENV"; fi
+          if [ -z "${META_ENABLED:-}" ]; then echo "META_ENABLED=false" >> "$GITHUB_ENV"; fi
           if [ -z "${TIKTOK_ENABLED:-}" ]; then echo "TIKTOK_ENABLED=false" >> "$GITHUB_ENV"; fi
           if [ -z "${QUORA_ENABLED:-}" ]; then echo "QUORA_ENABLED=false" >> "$GITHUB_ENV"; fi
         env:
