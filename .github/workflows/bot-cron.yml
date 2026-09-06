@@ -58,14 +58,31 @@ jobs:
           path: bot_state.db
           key: cinevo-bot-db-v1
 
-      # Diagnostic step: prints the resolved (non-secret) config so we can
-      # confirm GitHub is passing the variables correctly. Secrets are NOT shown.
-      - name: Show resolved config (non-secret)
+      # Apply safe defaults for any variable that was not set in the repo.
+      # This lets the bot run even if a variable is missing, while secrets
+      # (API keys) are still required from the Secrets tab.
+      - name: Apply config defaults
+        run: |
+          # BOT_ENABLED defaults to true so the bot actually runs.
+          if [ -z "${BOT_ENABLED:-}" ]; then echo "BOT_ENABLED=true" >> "$GITHUB_ENV"; fi
+          # ACTIVE_PLATFORMS defaults to youtube,meta.
+          if [ -z "${ACTIVE_PLATFORMS:-}" ]; then echo "ACTIVE_PLATFORMS=youtube,meta" >> "$GITHUB_ENV"; fi
+          # Platform enable flags default to true if not set.
+          if [ -z "${YOUTUBE_ENABLED:-}" ]; then echo "YOUTUBE_ENABLED=true" >> "$GITHUB_ENV"; fi
+          if [ -z "${META_ENABLED:-}" ]; then echo "META_ENABLED=true" >> "$GITHUB_ENV"; fi
+          if [ -z "${TIKTOK_ENABLED:-}" ]; then echo "TIKTOK_ENABLED=false" >> "$GITHUB_ENV"; fi
+          if [ -z "${QUORA_ENABLED:-}" ]; then echo "QUORA_ENABLED=false" >> "$GITHUB_ENV"; fi
         env:
           BOT_ENABLED: ${{ vars.BOT_ENABLED }}
           ACTIVE_PLATFORMS: ${{ vars.ACTIVE_PLATFORMS }}
           YOUTUBE_ENABLED: ${{ vars.YOUTUBE_ENABLED }}
           META_ENABLED: ${{ vars.META_ENABLED }}
+          TIKTOK_ENABLED: ${{ vars.TIKTOK_ENABLED }}
+          QUORA_ENABLED: ${{ vars.QUORA_ENABLED }}
+
+      # Diagnostic step: prints the resolved (non-secret) config so we can
+      # confirm GitHub is passing the variables correctly. Secrets are NOT shown.
+      - name: Show resolved config (non-secret)
         run: |
           echo "BOT_ENABLED='${BOT_ENABLED}'"
           echo "ACTIVE_PLATFORMS='${ACTIVE_PLATFORMS}'"
@@ -75,8 +92,8 @@ jobs:
       - name: Run bot (single cycle)
         env:
           # --- Master switch / platforms ---
-          BOT_ENABLED: ${{ vars.BOT_ENABLED }}
-          ACTIVE_PLATFORMS: ${{ vars.ACTIVE_PLATFORMS }}
+          BOT_ENABLED: ${{ env.BOT_ENABLED }}
+          ACTIVE_PLATFORMS: ${{ env.ACTIVE_PLATFORMS }}
           # --- DeepSeek AI ---
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_BASE_URL: ${{ vars.DEEPSEEK_BASE_URL }}
@@ -87,24 +104,24 @@ jobs:
           WEBSITE_URL: ${{ vars.WEBSITE_URL }}
           BRAND_NAME: ${{ vars.BRAND_NAME }}
           # --- YouTube ---
-          YOUTUBE_ENABLED: ${{ vars.YOUTUBE_ENABLED }}
+          YOUTUBE_ENABLED: ${{ env.YOUTUBE_ENABLED }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           YOUTUBE_OAUTH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_TOKEN }}
           YOUTUBE_VIDEO_IDS: ${{ vars.YOUTUBE_VIDEO_IDS }}
           YOUTUBE_CHANNEL_IDS: ${{ vars.YOUTUBE_CHANNEL_IDS }}
           # --- Meta (Facebook + Instagram) ---
-          META_ENABLED: ${{ vars.META_ENABLED }}
+          META_ENABLED: ${{ env.META_ENABLED }}
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
           META_API_VERSION: ${{ vars.META_API_VERSION }}
           FACEBOOK_PAGE_IDS: ${{ vars.FACEBOOK_PAGE_IDS }}
           INSTAGRAM_BUSINESS_IDS: ${{ vars.INSTAGRAM_BUSINESS_IDS }}
           # --- TikTok ---
-          TIKTOK_ENABLED: ${{ vars.TIKTOK_ENABLED }}
+          TIKTOK_ENABLED: ${{ env.TIKTOK_ENABLED }}
           TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
           TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
           TIKTOK_VIDEO_IDS: ${{ vars.TIKTOK_VIDEO_IDS }}
           # --- Quora ---
-          QUORA_ENABLED: ${{ vars.QUORA_ENABLED }}
+          QUORA_ENABLED: ${{ env.QUORA_ENABLED }}
           QUORA_TOPICS: ${{ vars.QUORA_TOPICS }}
           QUORA_USERNAME: ${{ secrets.QUORA_USERNAME }}
           QUORA_PASSWORD: ${{ secrets.QUORA_PASSWORD }}
