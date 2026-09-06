@@ -1,0 +1,116 @@
+# ============================================================================
+# Cinevo AI Social Media Engagement Bot - Scheduled GitHub Action
+# ============================================================================
+# Runs the bot on a schedule (cron) inside GitHub Actions.
+#
+# IMPORTANT (SECURITY):
+#   - NO real secrets are stored in this file.
+#   - All API keys/tokens are read from GitHub *repository secrets* at runtime
+#     via the `env:` block below (e.g. ${{ secrets.DEEPSEEK_API_KEY }}).
+#   - To configure, add each secret in:
+#       GitHub repo -> Settings -> Secrets and variables -> Actions
+#     using the exact names listed in the `env:` block.
+#
+# How it works:
+#   - `python main.py --once` processes ONE full cycle across all enabled
+#     platforms and then exits (ideal for cron).
+#   - The SQLite database (bot_state.db) is restored from the GitHub Actions
+#     cache before running and saved back afterwards, so the bot remembers
+#     which comments it already replied to and never double-posts.
+# ============================================================================
+
+name: Cinevo Bot (scheduled)
+
+on:
+  schedule:
+    # Cron uses UTC. Runs every 30 minutes by default.
+    # Adjust to your needs, e.g. every 15 min:  "*/15 * * * *"
+    - cron: "*/30 * * * *"
+  workflow_dispatch: # Allows manual trigger from the Actions tab.
+
+jobs:
+  run-bot:
+    name: Run bot (single cycle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Restore the SQLite "already replied" state so we don't double-post.
+      # The cache key is static on purpose: we always want the latest DB.
+      - name: Restore bot state database from cache
+        id: db-cache
+        uses: actions/cache@v4
+        with:
+          path: bot_state.db
+          key: cinevo-bot-db-v1
+
+      - name: Run bot (single cycle)
+        env:
+          # --- Master switch / platforms ---
+          BOT_ENABLED: ${{ vars.BOT_ENABLED }}
+          ACTIVE_PLATFORMS: ${{ vars.ACTIVE_PLATFORMS }}
+          # --- DeepSeek AI ---
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ vars.DEEPSEEK_BASE_URL }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+          DEEPSEEK_MAX_TOKENS: ${{ vars.DEEPSEEK_MAX_TOKENS }}
+          DEEPSEEK_TEMPERATURE: ${{ vars.DEEPSEEK_TEMPERATURE }}
+          # --- Brand / website ---
+          WEBSITE_URL: ${{ vars.WEBSITE_URL }}
+          BRAND_NAME: ${{ vars.BRAND_NAME }}
+          # --- YouTube ---
+          YOUTUBE_ENABLED: ${{ vars.YOUTUBE_ENABLED }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          YOUTUBE_OAUTH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_TOKEN }}
+          YOUTUBE_VIDEO_IDS: ${{ vars.YOUTUBE_VIDEO_IDS }}
+          YOUTUBE_CHANNEL_IDS: ${{ vars.YOUTUBE_CHANNEL_IDS }}
+          # --- Meta (Facebook + Instagram) ---
+          META_ENABLED: ${{ vars.META_ENABLED }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_API_VERSION: ${{ vars.META_API_VERSION }}
+          FACEBOOK_PAGE_IDS: ${{ vars.FACEBOOK_PAGE_IDS }}
+          INSTAGRAM_BUSINESS_IDS: ${{ vars.INSTAGRAM_BUSINESS_IDS }}
+          # --- TikTok ---
+          TIKTOK_ENABLED: ${{ vars.TIKTOK_ENABLED }}
+          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+          TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
+          TIKTOK_VIDEO_IDS: ${{ vars.TIKTOK_VIDEO_IDS }}
+          # --- Quora ---
+          QUORA_ENABLED: ${{ vars.QUORA_ENABLED }}
+          QUORA_TOPICS: ${{ vars.QUORA_TOPICS }}
+          QUORA_USERNAME: ${{ secrets.QUORA_USERNAME }}
+          QUORA_PASSWORD: ${{ secrets.QUORA_PASSWORD }}
+          # --- Behaviour / anti-ban tuning ---
+          MIN_DELAY_SECONDS: ${{ vars.MIN_DELAY_SECONDS }}
+          MAX_DELAY_SECONDS: ${{ vars.MAX_DELAY_SECONDS }}
+          POLL_INTERVAL_SECONDS: ${{ vars.POLL_INTERVAL_SECONDS }}
+          MAX_COMMENTS_PER_CYCLE: ${{ vars.MAX_COMMENTS_PER_CYCLE }}
+          # --- Targets / DB / logging ---
+          TARGETS_FILE: targets.json
+          MAX_TARGETS_PER_PLATFORM: ${{ vars.MAX_TARGETS_PER_PLATFORM }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+        run: |
+          # Run exactly one cycle then exit (safe for a scheduled job).
+          python main.py --once
+
+      # Save the updated DB so the next scheduled run knows what was replied to.
+      - name: Save bot state database to cache
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: bot_state.db
+          key: cinevo-bot-db-v1
