@@ -58,6 +58,20 @@ jobs:
           path: bot_state.db
           key: cinevo-bot-db-v1
 
+      # Diagnostic step: prints the resolved (non-secret) config so we can
+      # confirm GitHub is passing the variables correctly. Secrets are NOT shown.
+      - name: Show resolved config (non-secret)
+        env:
+          BOT_ENABLED: ${{ vars.BOT_ENABLED }}
+          ACTIVE_PLATFORMS: ${{ vars.ACTIVE_PLATFORMS }}
+          YOUTUBE_ENABLED: ${{ vars.YOUTUBE_ENABLED }}
+          META_ENABLED: ${{ vars.META_ENABLED }}
+        run: |
+          echo "BOT_ENABLED='${BOT_ENABLED}'"
+          echo "ACTIVE_PLATFORMS='${ACTIVE_PLATFORMS}'"
+          echo "YOUTUBE_ENABLED='${YOUTUBE_ENABLED}'"
+          echo "META_ENABLED='${META_ENABLED}'"
+
       - name: Run bot (single cycle)
         env:
           # --- Master switch / platforms ---
