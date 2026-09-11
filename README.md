@@ -32,6 +32,8 @@ cinevo-social-bot/
 ├── discover_targets.py      # سكريبت اكتشاف معرّفات الأفلام/المسلسلات
 ├── targets_loader.py        # قراءة/إدارة ملف الأهداف targets.json
 ├── targets.json             # تخزين المعرّفات المكتشفة (مقسّم ومنظّم)
+├── setup_env.py             # إنشاء ملف .env تفاعلياً (اختبار محلي)
+├── check_setup.py           # فحص تشخيصي محلي لكل المفاتيح (7 خطوات)
 ├── requirements.txt         # مكتبات بايثون المطلوبة
 ├── ecosystem.config.js      # تشغيل PM2
 ├── cinevo-bot.service       # (بديل) خدمة systemd
@@ -215,6 +217,89 @@ python discover_targets.py --dry-run
    عندما يلائم النقاش (سؤال عن مكان المشاهدة، مقارنة، توصيات...).
 4. **نبرة إنسانية**: يطابق لغة تعليق المستخدم (عربي يبقى عربي، إنجليزي
    يبقى إنجليزي...)، ولا يكشف أنه بوت.
+
+---
+
+## 🧪 الاختبار المحلي خطوة بخطوة (قبل النشر على GitHub Actions)
+
+الهدف: التأكد أن **كل مفتاح يعمل 100%** على جهازك أولاً، ثم النشر على GitHub
+Actions. لا تنشر شيئاً قبل أن ينجح الاختبار المحلي.
+
+### الخطوة 0 — تثبيت المكتبات
+
+```bash
+cd cinevo-social-bot
+pip install -r requirements.txt
+```
+
+### الخطوة 1 — إنشاء ملف `.env` تلقائياً
+
+بدلاً من تعديل `.env` يدوياً (والتعرض لأخطاء المسافات/العلامات)، شغّل:
+
+```bash
+python setup_env.py
+```
+
+سيسألك عن:
+1. `DEEPSEEK_API_KEY` — من https://platform.deepseek.com/api_keys
+2. `YOUTUBE_API_KEY` — من Google Cloud Console (اقرأ الخطوة 3 أدناه)
+3. `YOUTUBE_OAUTH_TOKEN` — اختياري (للنشر فقط؛ اتركه فارغاً للاختبار)
+4. `ACTIVE_PLATFORMS` — اكتب `youtube` للاختبار المحلي
+
+> ملف `.env` مُستثنى في [`.gitignore`](.gitignore) ولن يُرفع إلى GitHub أبداً.
+
+### الخطوة 2 — تشغيل الفحص التشخيصي
+
+```bash
+python check_setup.py
+```
+
+يفحص 7 أشياء بالترتيب ويطبع `PASS` / `FAIL` / `WARN` لكل واحدة:
+
+| # | الفحص | ماذا يعني |
+|---|-------|-----------|
+| 1 | وجود `.env` | الملف موجود وقابل للقراءة |
+| 2 | المتغيرات المطلوبة | المفاتيح غير فارغة |
+| 3 | DeepSeek API | نداء حقيقي — يجب أن يرد `OK` |
+| 4 | YouTube API key | نداء حقيقي — يجب أن ينجح |
+| 5 | YouTube OAuth | نداء حقيقي — يجب أن ينجح (أو WARN إن كان فارغاً) |
+| 6 | `targets.json` | يوجد هدف واحد على الأقل |
+| 7 | دورة Dry-run | توليد رد كامل **بدون نشر** |
+
+النتيجة النهائية تكون إحدى:
+- `READY 100% [OK]` — كل شيء يعمل، انتقل للخطوة 5.
+- `READY (with warnings) [!]` — يعمل لكن لن ينشر (OAuth ناقص).
+- `NOT READY [X]` — أصلح عناصر `FAIL` ثم أعد التشغيل.
+
+### الخطوة 3 — إصلاح أخطاء YouTube (الأكثر شيوعاً)
+
+إن ظهر `FAIL` في الفحص رقم 4، فالمشكلة في **المفتاح نفسه** وليس في معرّفات
+القنوات. فعّل الواجهة:
+
+1. اذهب إلى [Google Cloud Console](https://console.cloud.google.com/)
+2. اختر المشروع الذي يحتوي على المفتاح
+3. **APIs & Services → Library**
+4. ابحث عن **YouTube Data API v3** واضغط **Enable**
+5. **APIs & Services → Credentials** → افتح مفتاحك → تأكد أنه **بلا قيود**
+   (أزل HTTP referrer / IP restrictions للاختبار)
+6. انتظر 1–2 دقيقة ثم أعد `python check_setup.py`
+
+### الخطوة 4 — تعبئة الأهداف (إن كان الفحص 6 فاشلاً)
+
+```bash
+python discover_targets.py --platform youtube --max 10000
+```
+
+### الخطوة 5 — النشر على GitHub Actions
+
+بعد أن يصبح الفحص `READY 100%`:
+
+1. تأكد أن أسرار GitHub مطابقة لملفك المحلي:
+   **Settings → Secrets and variables → Actions** → أضف
+   `DEEPSEEK_API_KEY`, `YOUTUBE_API_KEY`, `YOUTUBE_OAUTH_TOKEN`
+2. اذهب إلى تبويب **Actions** → اختر **Cinevo Bot (scheduled)** →
+   **Run workflow** (تشغيل يدوي للتجربة)
+3. اقرأ خطوة **Run summary** — يجب أن ترى `DeepSeek calls` أكبر من صفر.
 
 ---
 
