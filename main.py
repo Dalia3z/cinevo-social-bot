@@ -244,6 +244,30 @@ def main() -> None:
         logger.error("No platform handlers enabled. Check ACTIVE_PLATFORMS.")
         sys.exit(1)
 
+    # ------------------------------------------------------------------ #
+    # Startup diagnostics: make it obvious WHY DeepSeek may never be
+    # called. If there are no targets, the bot has nothing to reply to and
+    # the DeepSeek API usage will legitimately stay at 0.
+    # ------------------------------------------------------------------ #
+    logger.info("Active platforms: %s", ", ".join(bot.handlers.keys()))
+    for name, handler in bot.handlers.items():
+        video_ids = getattr(handler, "video_ids", None)
+        channel_ids = getattr(handler, "channel_ids", None)
+        if video_ids is not None or channel_ids is not None:
+            logger.info(
+                "[%s] Targets loaded -> videos=%d channels=%d",
+                name,
+                len(video_ids or []),
+                len(channel_ids or []),
+            )
+            if not (video_ids or channel_ids):
+                logger.warning(
+                    "[%s] NO targets configured. The bot will find no comments "
+                    "and DeepSeek will NOT be called. Populate targets.json by "
+                    "running: python discover_targets.py --all --max 10000",
+                    name,
+                )
+
     if args.once:
         posted = bot.run_once()
         logger.info("Single cycle finished. Replies posted: %d", posted)

@@ -21,12 +21,23 @@
 
 name: Cinevo Bot (scheduled)
 
+# ---------------------------------------------------------------------------
+# IMPORTANT: GitHub disables `schedule` triggers automatically after 60 days
+# of repository inactivity. If the bot "stops running", re-enable the workflow
+# from the Actions tab (or push any commit) and it will resume.
+# Also note: GitHub's cron is best-effort and can be delayed by 5-30+ minutes,
+# and high-frequency schedules (every 30 min) are frequently SKIPPED.
+# ---------------------------------------------------------------------------
 on:
   schedule:
     # Cron uses UTC. Runs every 30 minutes by default.
     # Adjust to your needs, e.g. every 15 min:  "*/15 * * * *"
     - cron: "*/30 * * * *"
   workflow_dispatch: # Allows manual trigger from the Actions tab.
+
+# Allow the workflow to write back the updated DB cache and (optionally) commit.
+permissions:
+  contents: read
 
 jobs:
   run-bot:
@@ -89,6 +100,32 @@ jobs:
           echo "YOUTUBE_ENABLED='${YOUTUBE_ENABLED}'"
           echo "META_ENABLED='${META_ENABLED}'"
 
+      # Fail fast with a CLEAR message if a required secret is missing.
+      # Without this, the bot silently exits and DeepSeek usage stays at 0.
+      - name: Verify required secrets are present
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          YOUTUBE_OAUTH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_TOKEN }}
+        run: |
+          missing=0
+          if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
+            echo "::error::DEEPSEEK_API_KEY secret is MISSING. Add it in Settings -> Secrets and variables -> Actions."
+            missing=1
+          fi
+          if [ -z "${YOUTUBE_API_KEY:-}" ]; then
+            echo "::error::YOUTUBE_API_KEY secret is MISSING. Add it in Settings -> Secrets and variables -> Actions."
+            missing=1
+          fi
+          if [ -z "${YOUTUBE_OAUTH_TOKEN:-}" ]; then
+            echo "::warning::YOUTUBE_OAUTH_TOKEN secret is MISSING. The bot can READ comments but CANNOT POST replies."
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "Aborting: required secrets are missing."
+            exit 1
+          fi
+          echo "All required secrets are present."
+
       - name: Run bot (single cycle)
         env:
           # --- Master switch / platforms ---
@@ -136,7 +173,29 @@ jobs:
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
         run: |
           # Run exactly one cycle then exit (safe for a scheduled job).
-          python main.py --once
+          # `set -o pipefail` ensures a Python crash fails the step.
+          set -o pipefail
+          python main.py --once 2>&1 | tee bot_run.log
+
+      # Print a short summary so we can see WHY DeepSeek usage may be 0:
+      #   - "No new comments to handle"  -> nothing to reply to (targets empty)
+      #   - "No AI reply generated"      -> DeepSeek call failed (bad key/quota)
+      #   - "Cannot post ... OAUTH"      -> reply generated but not posted
+      - name: Run summary
+        if: always()
+        run: |
+          echo "==================== BOT RUN SUMMARY ===================="
+          if [ -f bot_run.log ]; then
+            echo "--- Lines mentioning DeepSeek / AI ---"
+            grep -iE "deepseek|ai reply|generated" bot_run.log || echo "(none - DeepSeek was never called)"
+            echo "--- Lines mentioning comments / items ---"
+            grep -iE "new comment|new item|no new" bot_run.log || echo "(none)"
+            echo "--- Errors ---"
+            grep -iE "error|failed|missing|aborting" bot_run.log || echo "(none)"
+          else
+            echo "bot_run.log not found."
+          fi
+          echo "========================================================="
 
       # Save the updated DB so the next scheduled run knows what was replied to.
       - name: Save bot state database to cache
