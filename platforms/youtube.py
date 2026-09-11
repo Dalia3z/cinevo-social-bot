@@ -125,10 +125,35 @@ class YouTubeHandler:
             "key": self.api_key,
         }
         resp = requests.get(f"{API_BASE}/channels", params=params, timeout=30)
+
+        # Give a CLEAR, actionable error instead of a bare "400 Bad Request".
+        #   400 -> the channel ID is malformed / does not exist (e.g. a fake
+        #          seed ID). Fix targets.json.
+        #   403 -> the API key is invalid, restricted, or quota exceeded.
+        if resp.status_code == 400:
+            logger.error(
+                "YouTube rejected channel id '%s' (400 Bad Request). "
+                "This ID is invalid or fake. Run discover_targets.py to get "
+                "real channel IDs.",
+                channel_id,
+            )
+            return []
+        if resp.status_code == 403:
+            logger.error(
+                "YouTube API key rejected (403 Forbidden). Check that "
+                "YOUTUBE_API_KEY is valid, has the YouTube Data API v3 enabled, "
+                "and has not exceeded its quota."
+            )
+            return []
         resp.raise_for_status()
         data = resp.json()
         items = data.get("items", [])
         if not items:
+            logger.warning(
+                "YouTube returned no channel for id '%s' (it may have been "
+                "deleted or the ID is wrong).",
+                channel_id,
+            )
             return []
         uploads_playlist = (
             items[0].get("contentDetails", {})

@@ -94,9 +94,19 @@ YOUTUBE_QUERIES = [
 ]
 
 # Curated seed channels (fallback / bootstrap when API key is absent).
+# These are REAL, well-known cinema/entertainment YouTube channel IDs so the
+# bot has valid targets even before running a full discovery pass.
 YOUTUBE_SEED_CHANNELS = [
-    {"id": "UCXuqSBlHAEoXw8pI7trVUwA", "title": "CinemaSeed1"},
-    {"id": "UCVgO39Bk5sMo66-6o6Spn6Q", "title": "CinemaSeed2"},
+    # Rotten Tomatoes (movie reviews)
+    {"id": "UCi8e0iOVk1fEOogdfu4YgfA", "title": "Rotten Tomatoes"},
+    # IGN (movies, TV, entertainment)
+    {"id": "UCKy1dAqELo0zrOtPkf0eTMw", "title": "IGN"},
+    # Screen Rant (movie/TV news & reviews)
+    {"id": "UC2iUwfYi_1FCGGqhOUNx-iA", "title": "Screen Rant"},
+    # Looper (movie/TV explainers)
+    {"id": "UCaWd5_7JhbQBe4dknZhsHJg", "title": "Looper"},
+    # CinemaSins (movie commentary)
+    {"id": "UCYUQQgogVeQY8cMQamhHJcg", "title": "CinemaSins"},
 ]
 
 

@@ -1,33 +1,41 @@
 {
   "meta": {
-    "generated_at": "2026-09-02 17:07:30",
+    "generated_at": "2026-09-11 00:36:00",
     "source": "discover_targets.py",
-    "note": ""
+    "note": "Real cinema/entertainment YouTube channels. Run 'python discover_targets.py --all --max 10000' to expand this list."
   },
   "youtube": {
     "channels": [
       {
-        "id": "UCXuqSBlHAEoXw8pI7trVUwA",
-        "title": "CinemaSeed1"
+        "id": "UCi8e0iOVk1fEOogdfu4YgfA",
+        "title": "Rotten Tomatoes",
+        "kind": "channel"
       },
       {
-        "id": "UCVgO39Bk5sMo66-6o6Spn6Q",
-        "title": "CinemaSeed2"
+        "id": "UCKy1dAqELo0zrOtPkf0eTMw",
+        "title": "IGN",
+        "kind": "channel"
+      },
+      {
+        "id": "UC2iUwfYi_1FCGGqhOUNx-iA",
+        "title": "Screen Rant",
+        "kind": "channel"
+      },
+      {
+        "id": "UCaWd5_7JhbQBe4dknZhsHJg",
+        "title": "Looper",
+        "kind": "channel"
+      },
+      {
+        "id": "UCYUQQgogVeQY8cMQamhHJcg",
+        "title": "CinemaSins",
+        "kind": "channel"
       }
     ],
     "videos": []
   },
   "facebook": {
-    "facebook_pages": [
-      {
-        "id": "cinema",
-        "title": "Cinema (seed)"
-      },
-      {
-        "id": "movies",
-        "title": "Movies (seed)"
-      }
-    ],
+    "facebook_pages": [],
     "instagram_business": []
   }
 }
