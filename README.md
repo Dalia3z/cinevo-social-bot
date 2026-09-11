@@ -218,6 +218,54 @@ python discover_targets.py --dry-run
 
 ---
 
+## 🩺 حل المشاكل (Troubleshooting)
+
+### 1) البوت لا يعمل / DeepSeek usage = 0
+
+افتح تبويب **Actions** في GitHub وشغّل الـ workflow يدوياً، ثم اقرأ خطوة
+**Run summary**. ستخبرك بالسبب مباشرة:
+
+| الرسالة في السجل | السبب | الحل |
+|------------------|-------|------|
+| `DEEPSEEK_API_KEY secret is MISSING` | الـ secret ناقص | أضفه في Settings → Secrets |
+| `(none - DeepSeek was never called)` | لا توجد تعليقات (targets فارغة) | شغّل `discover_targets.py` |
+| `YouTube API key self-test FAILED` | مفتاح YouTube غير صالح | راجع القسم 2 أدناه |
+| `No AI reply generated` | فشل نداء DeepSeek | تحقق من المفتاح/الرصيد |
+| `Cannot post ... OAUTH` | `YOUTUBE_OAUTH_TOKEN` ناقص | أضف التوكن |
+
+### 2) خطأ `400 Bad Request` من YouTube
+
+هذا الخطأ يعني أن **مفتاح `YOUTUBE_API_KEY` لا يعمل** (وليس أن معرّفات
+القنوات خاطئة). البوت الآن يطبع **رد Google الخام** ليعطيك السبب الدقيق:
+
+| رد Google | المعنى | الحل |
+|-----------|--------|------|
+| `API key not valid` | المفتاح خاطئ/ناقص | أنشئ مفتاحاً جديداً |
+| `API has not been used ... disabled` | YouTube Data API v3 غير مفعّل | فعّله في Cloud Console |
+| `requests from referer ... blocked` | قيود على المفتاح | أزل قيود HTTP referrer/IP |
+| `quotaExceeded` | الحصة انتهت | انتظر أو استخدم مشروعاً آخر |
+
+**خطوات تفعيل YouTube Data API v3:**
+1. اذهب إلى [Google Cloud Console](https://console.cloud.google.com/)
+2. اختر المشروع الذي يحتوي على المفتاح
+3. **APIs & Services → Library**
+4. ابحث عن **YouTube Data API v3**
+5. اضغط **Enable** ✅
+6. انتظر 1–2 دقيقة ثم أعد تشغيل الـ workflow
+
+### 3) الـ workflow توقف عن العمل بعد فترة
+
+GitHub **يعطّل** الـ workflows المجدولة تلقائياً بعد **60 يوماً** من عدم
+النشاط في المستودع. الحل: ملف
+[`keepalive.yml`](.github/workflows/keepalive.yml) يقوم بعمل commit أسبوعي
+لتجديد المؤقّت تلقائياً. إن توقف الـ workflow رغم ذلك، فعّله يدوياً من
+تبويب **Actions → Enable workflow**.
+
+> **ملاحظة**: جدولة GitHub (cron) هي "best-effort" وقد تتأخر أو تُتخطى،
+> خاصة للجداول عالية التكرار مثل `*/30`. هذا سلوك طبيعي من GitHub.
+
+---
+
 ## 📄 الترخيص والمسؤولية
 
 هذا المشروع لأغراض أتمتة التفاعل مع حسابات تملكها/تديرها. التزم دائماً
