@@ -72,6 +72,10 @@ class YouTubeHandler:
             logger.warning("YouTube API key missing; skipping fetch.")
             return []
 
+        # Self-test the API key ONCE per cycle so the log clearly states
+        # whether the key itself works, independent of the channel IDs.
+        self._selftest_api_key()
+
         # Build the set of video IDs to monitor: direct video targets plus the
         # recent uploads of discovered channels.
         video_ids = list(self.video_ids)
@@ -113,6 +117,47 @@ class YouTubeHandler:
                     return items
         return items
 
+    def _selftest_api_key(self) -> None:
+        """
+        Verify the YouTube API key works by calling a cheap, always-valid
+        endpoint. This isolates "bad API key" from "bad channel ID" so the
+        logs are unambiguous.
+
+        We call `videos?part=id&chart=mostPopular` which requires only a valid
+        key and the YouTube Data API v3 enabled. Any error body is logged.
+        """
+        params = {
+            "part": "id",
+            "chart": "mostPopular",
+            "maxResults": 1,
+            "key": self.api_key,
+        }
+        try:
+            resp = requests.get(f"{API_BASE}/videos", params=params, timeout=30)
+        except requests.exceptions.RequestException as exc:
+            logger.error("YouTube API key self-test network error: %s", exc)
+            return
+
+        if resp.status_code == 200:
+            logger.info(
+                "YouTube API key self-test: OK (key is valid and the "
+                "YouTube Data API v3 is enabled)."
+            )
+            return
+
+        # Log the raw Google error so the exact cause is visible.
+        logger.error(
+            "YouTube API key self-test FAILED (HTTP %s). Google says: %s",
+            resp.status_code,
+            resp.text[:500],
+        )
+        logger.error(
+            "Likely causes: (1) YOUTUBE_API_KEY is wrong/truncated, "
+            "(2) the YouTube Data API v3 is NOT enabled for this key's "
+            "Google Cloud project, or (3) the key has HTTP referrer/IP "
+            "restrictions that block server-side calls."
+        )
+
     def _fetch_channel_uploads(self, channel_id: str) -> List[str]:
         """
         Fetch the most recent video IDs uploaded by a channel.
@@ -127,22 +172,21 @@ class YouTubeHandler:
         resp = requests.get(f"{API_BASE}/channels", params=params, timeout=30)
 
         # Give a CLEAR, actionable error instead of a bare "400 Bad Request".
-        #   400 -> the channel ID is malformed / does not exist (e.g. a fake
-        #          seed ID). Fix targets.json.
-        #   403 -> the API key is invalid, restricted, or quota exceeded.
+        # We also log the RAW response body from Google, because it contains
+        # the exact reason (e.g. "API key not valid", "API not enabled",
+        # "quotaExceeded"). This is the fastest way to diagnose the failure.
         if resp.status_code == 400:
             logger.error(
                 "YouTube rejected channel id '%s' (400 Bad Request). "
-                "This ID is invalid or fake. Run discover_targets.py to get "
-                "real channel IDs.",
+                "Google says: %s",
                 channel_id,
+                resp.text[:500],
             )
             return []
         if resp.status_code == 403:
             logger.error(
-                "YouTube API key rejected (403 Forbidden). Check that "
-                "YOUTUBE_API_KEY is valid, has the YouTube Data API v3 enabled, "
-                "and has not exceeded its quota."
+                "YouTube API key rejected (403 Forbidden). Google says: %s",
+                resp.text[:500],
             )
             return []
         resp.raise_for_status()
