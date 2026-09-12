@@ -176,6 +176,7 @@ jobs:
           MAX_DELAY_SECONDS: ${{ vars.MAX_DELAY_SECONDS }}
           POLL_INTERVAL_SECONDS: ${{ vars.POLL_INTERVAL_SECONDS }}
           MAX_COMMENTS_PER_CYCLE: ${{ vars.MAX_COMMENTS_PER_CYCLE }}
+          MAX_COMMENTS_PER_VIDEO: ${{ vars.MAX_COMMENTS_PER_VIDEO }}
           # --- Targets / DB / logging ---
           TARGETS_FILE: targets.json
           MAX_TARGETS_PER_PLATFORM: ${{ vars.MAX_TARGETS_PER_PLATFORM }}

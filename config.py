@@ -226,6 +226,11 @@ class Settings:
     max_comments_per_cycle: int = field(
         default_factory=lambda: _get_int("MAX_COMMENTS_PER_CYCLE", 20)
     )
+    # Max comments to take from a SINGLE video per cycle. Keeps replies spread
+    # across many videos instead of hammering one video (which looks spammy).
+    max_comments_per_video: int = field(
+        default_factory=lambda: _get_int("MAX_COMMENTS_PER_VIDEO", 2)
+    )
     # Master kill-switch for the whole bot.
     bot_enabled: bool = field(
         default_factory=lambda: _get_bool("BOT_ENABLED", True)

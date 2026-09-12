@@ -16,6 +16,7 @@ Auth note:
 """
 
 import logging
+import random
 import time
 from typing import List, Optional
 
@@ -97,6 +98,17 @@ class YouTubeHandler:
                 if vid not in video_ids:
                     video_ids.append(vid)
 
+        # Shuffle the video order every cycle so we don't always start from the
+        # SAME first video. Without this, the bot filled its per-cycle quota
+        # (max_items) from the first video alone and never reached the other
+        # ~2975 videos. Shuffling spreads replies across many videos.
+        random.shuffle(video_ids)
+
+        # Cap how many comments we take from a SINGLE video per cycle. This
+        # forces the bot to move on to other videos instead of replying to 20
+        # comments on one video (which also looks spammy to YouTube).
+        per_video_cap = max(1, settings.max_comments_per_video)
+
         items: List[dict] = []
         for video_id in video_ids:
             try:
@@ -105,6 +117,7 @@ class YouTubeHandler:
                 logger.error("YouTube fetch failed for %s: %s", video_id, exc)
                 continue
 
+            taken_from_video = 0
             for c in comments:
                 # A commentThread item nests the actual comment under
                 # snippet.topLevelComment. The thread's own `id` is NOT the
@@ -137,8 +150,13 @@ class YouTubeHandler:
                         "author": top_snippet.get("authorDisplayName", ""),
                     }
                 )
+                taken_from_video += 1
                 if len(items) >= self.max_items:
                     return items
+                # Move on to the next video once we've taken enough comments
+                # from this one, so replies spread across many videos.
+                if taken_from_video >= per_video_cap:
+                    break
         return items
 
     def _selftest_api_key(self) -> None:
