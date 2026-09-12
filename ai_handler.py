@@ -105,7 +105,13 @@ class AIHandler:
 
     def __init__(self) -> None:
         self.api_key = settings.deepseek_api_key
-        self.base_url = settings.deepseek_base_url.rstrip("/")
+        # Guard against an empty/whitespace base URL (e.g. an undefined
+        # GitHub Actions variable expanding to ''), which would otherwise
+        # produce a cryptic "Invalid URL '/chat/completions'" error.
+        base_url = (settings.deepseek_base_url or "").strip().rstrip("/")
+        if not base_url:
+            base_url = "https://api.deepseek.com"
+        self.base_url = base_url
         self.model = settings.deepseek_model
         self.max_tokens = settings.deepseek_max_tokens
         self.temperature = settings.deepseek_temperature

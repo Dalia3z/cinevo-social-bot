@@ -26,10 +26,26 @@ except ImportError:  # python-dotenv not installed -> rely on real env vars
     pass
 
 
+def _get_str(name: str, default: str = "") -> str:
+    """
+    Read an environment variable as a string, treating an EMPTY or
+    whitespace-only value as "not set" and falling back to `default`.
+
+    This matters on GitHub Actions: an undefined repository *variable*
+    expands to an empty string (e.g. DEEPSEEK_BASE_URL=''), and
+    `os.getenv(name, default)` would return '' instead of the default,
+    producing broken URLs like '/chat/completions'.
+    """
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip()
+
+
 def _get_bool(name: str, default: bool = False) -> bool:
     """Parse an environment variable as a boolean."""
     raw = os.getenv(name)
-    if raw is None:
+    if raw is None or not raw.strip():
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
@@ -64,13 +80,13 @@ class Settings:
     # DeepSeek AI
     # ------------------------------------------------------------------ #
     deepseek_api_key: str = field(
-        default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", "")
+        default_factory=lambda: _get_str("DEEPSEEK_API_KEY", "")
     )
     deepseek_base_url: str = field(
-        default_factory=lambda: os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+        default_factory=lambda: _get_str("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
     )
     deepseek_model: str = field(
-        default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+        default_factory=lambda: _get_str("DEEPSEEK_MODEL", "deepseek-chat")
     )
     deepseek_max_tokens: int = field(
         default_factory=lambda: _get_int("DEEPSEEK_MAX_TOKENS", 120)
@@ -83,21 +99,21 @@ class Settings:
     # Brand / website link injected naturally into replies
     # ------------------------------------------------------------------ #
     website_url: str = field(
-        default_factory=lambda: os.getenv("WEBSITE_URL", "https://cinevoapp.com")
+        default_factory=lambda: _get_str("WEBSITE_URL", "https://cinevoapp.com")
     )
     brand_name: str = field(
-        default_factory=lambda: os.getenv("BRAND_NAME", "Cinevo")
+        default_factory=lambda: _get_str("BRAND_NAME", "Cinevo")
     )
 
     # ------------------------------------------------------------------ #
     # YouTube Data API v3
     # ------------------------------------------------------------------ #
     youtube_api_key: str = field(
-        default_factory=lambda: os.getenv("YOUTUBE_API_KEY", "")
+        default_factory=lambda: _get_str("YOUTUBE_API_KEY", "")
     )
     # OAuth 2.0 access token required to POST replies (comments.insert).
     youtube_oauth_token: str = field(
-        default_factory=lambda: os.getenv("YOUTUBE_OAUTH_TOKEN", "")
+        default_factory=lambda: _get_str("YOUTUBE_OAUTH_TOKEN", "")
     )
     # Comma separated list of video IDs (Shorts) to monitor.
     youtube_video_ids: List[str] = field(default_factory=list)
@@ -111,7 +127,7 @@ class Settings:
     # Meta Graph API (Facebook Pages + Instagram Business)
     # ------------------------------------------------------------------ #
     meta_access_token: str = field(
-        default_factory=lambda: os.getenv("META_ACCESS_TOKEN", "")
+        default_factory=lambda: _get_str("META_ACCESS_TOKEN", "")
     )
     # Comma separated list of Facebook Page IDs.
     facebook_page_ids: List[str] = field(default_factory=list)
@@ -121,7 +137,7 @@ class Settings:
         default_factory=lambda: _get_bool("META_ENABLED", False)
     )
     meta_api_version: str = field(
-        default_factory=lambda: os.getenv("META_API_VERSION", "v19.0")
+        default_factory=lambda: _get_str("META_API_VERSION", "v19.0")
     )
 
     # ------------------------------------------------------------------ #
@@ -131,10 +147,10 @@ class Settings:
         default_factory=lambda: _get_bool("TIKTOK_ENABLED", False)
     )
     tiktok_access_token: str = field(
-        default_factory=lambda: os.getenv("TIKTOK_ACCESS_TOKEN", "")
+        default_factory=lambda: _get_str("TIKTOK_ACCESS_TOKEN", "")
     )
     tiktok_open_id: str = field(
-        default_factory=lambda: os.getenv("TIKTOK_OPEN_ID", "")
+        default_factory=lambda: _get_str("TIKTOK_OPEN_ID", "")
     )
     # Comma separated list of TikTok video IDs to monitor.
     tiktok_video_ids: List[str] = field(default_factory=list)
@@ -153,10 +169,10 @@ class Settings:
     quora_topics: List[str] = field(default_factory=list)
     # Optional: browser automation is used for Quora (no official public API).
     quora_username: str = field(
-        default_factory=lambda: os.getenv("QUORA_USERNAME", "")
+        default_factory=lambda: _get_str("QUORA_USERNAME", "")
     )
     quora_password: str = field(
-        default_factory=lambda: os.getenv("QUORA_PASSWORD", "")
+        default_factory=lambda: _get_str("QUORA_PASSWORD", "")
     )
     # Opt-in browser automation (high risk, disabled by default -> manual queue).
     quora_browser_automation: bool = field(
@@ -214,7 +230,7 @@ class Settings:
     # Logging
     # ------------------------------------------------------------------ #
     log_level: str = field(
-        default_factory=lambda: os.getenv("LOG_LEVEL", "INFO")
+        default_factory=lambda: _get_str("LOG_LEVEL", "INFO")
     )
     log_file: str = field(
         default_factory=lambda: os.getenv(
