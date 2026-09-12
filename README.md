@@ -338,7 +338,45 @@ python discover_targets.py --platform youtube --max 10000
 5. اضغط **Enable** ✅
 6. انتظر 1–2 دقيقة ثم أعد تشغيل الـ workflow
 
-### 3) الـ workflow توقف عن العمل بعد فترة
+### 3) أخطاء OAuth عند النشر (401 / `unauthorized_client`)
+
+النشر (الرد) يحتاج **OAuth 2.0** وليس مفتاح API. الأخطاء الشائعة:
+
+| الرسالة في السجل | السبب | الحل |
+|------------------|-------|------|
+| `401 Unauthorized` على `comments.insert` | `YOUTUBE_OAUTH_TOKEN` منتهي/خاطئ | جدّد التوكن (انظر أدناه) |
+| `unauthorized_client` عند refresh | الـ refresh token صادر من **OAuth client مختلف** عن `CLIENT_ID`/`SECRET` | استعمل نفس الـ client للثلاثة |
+| `redirect_uri_mismatch` في Playground | `https://developers.google.com/oauthplayground` غير مسجّل | أضفه في Authorized redirect URIs |
+
+**الحل الموصى به — سكربت محلي (بدون OAuth Playground):**
+
+بدل الاعتماد على Google OAuth Playground (الذي يسبب `unauthorized_client`)،
+استعمل السكربت [`get_youtube_refresh_token.py`](get_youtube_refresh_token.py):
+
+```bash
+python get_youtube_refresh_token.py --client-id YOUR_ID --client-secret YOUR_SECRET
+```
+
+1. سيطبع رابطاً — افتحه في المتصفح ووافق على الصلاحيات.
+2. سيعود تلقائياً إلى `http://localhost:8080/` ويلتقط الـ `code`.
+3. سيطبع **refresh token** مضمون أنه من **نفس** الـ client.
+
+ثم أضف هذه الأسرار الثلاثة في GitHub (كلها من **نفس** الـ OAuth client):
+
+| Secret | القيمة |
+|--------|--------|
+| `YOUTUBE_OAUTH_REFRESH_TOKEN` | الـ refresh token المطبوع |
+| `YOUTUBE_OAUTH_CLIENT_ID` | نفس الـ Client ID |
+| `YOUTUBE_OAUTH_CLIENT_SECRET` | نفس الـ Client Secret |
+
+> **مهم**: استعمل OAuth client من نوع **Desktop app** (يقبل `http://localhost`
+> تلقائياً)، أو **Web application** مع إضافة `http://localhost:8080/` في
+> Authorized redirect URIs.
+
+بعد إضافة الأسرار، البوت سيجدّد الـ access token تلقائياً في كل دورة
+(`YouTube OAuth token refreshed successfully`).
+
+### 4) الـ workflow توقف عن العمل بعد فترة
 
 GitHub **يعطّل** الـ workflows المجدولة تلقائياً بعد **60 يوماً** من عدم
 النشاط في المستودع. الحل: ملف
