@@ -224,7 +224,17 @@ class YouTubeHandler:
         ]
 
     def _fetch_comments_for_video(self, video_id: str) -> List[dict]:
-        """Fetch top-level comments for a single video (paginated, capped)."""
+        """
+        Fetch top-level comments for a single video (paginated, capped).
+
+        IMPORTANT: reading public comments requires ONLY the API key. We must
+        NOT send an `Authorization: Bearer` header here, because:
+          * If YOUTUBE_OAUTH_TOKEN is empty, `Bearer ` (empty) makes Google
+            return `401 Unauthorized`.
+          * If the token is expired/invalid, Google also returns `401`.
+        The OAuth token is only needed for POSTING replies (comments.insert),
+        which is handled separately in `post_reply`.
+        """
         params = {
             "part": "snippet",
             "videoId": video_id,
@@ -233,13 +243,38 @@ class YouTubeHandler:
             "order": "time",  # newest first
             "key": self.api_key,
         }
-        headers = {}
-        if self.oauth_token:
-            headers["Authorization"] = f"Bearer {self.oauth_token}"
 
         resp = requests.get(
-            f"{API_BASE}/commentThreads", params=params, headers=headers, timeout=30
+            f"{API_BASE}/commentThreads", params=params, timeout=30
         )
+
+        # Give a CLEAR, actionable error instead of a bare "401 Unauthorized".
+        if resp.status_code == 401:
+            logger.error(
+                "YouTube commentThreads returned 401 Unauthorized for video "
+                "'%s'. Google says: %s",
+                video_id,
+                resp.text[:500],
+            )
+            return []
+        if resp.status_code == 403:
+            logger.error(
+                "YouTube commentThreads returned 403 Forbidden for video "
+                "'%s' (comments may be disabled or quota exceeded). "
+                "Google says: %s",
+                video_id,
+                resp.text[:500],
+            )
+            return []
+        if resp.status_code == 404:
+            # Video deleted/private, or comments disabled. Not fatal.
+            logger.warning(
+                "YouTube commentThreads 404 for video '%s' (deleted/private "
+                "or comments disabled).",
+                video_id,
+            )
+            return []
+
         resp.raise_for_status()
         data = resp.json()
         return data.get("items", [])
