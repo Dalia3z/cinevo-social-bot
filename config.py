@@ -211,6 +211,13 @@ class Settings:
     max_delay_seconds: float = field(
         default_factory=lambda: _get_float("MAX_DELAY_SECONDS", 420)  # 7 min
     )
+    # Warm-up: for the first N replies the bot posts GENUINE comments with NO
+    # website link. YouTube holds replies from brand-new channels for review
+    # when they immediately post promotional links, so we build trust first.
+    # After N replies the link is included normally.
+    warmup_replies: int = field(
+        default_factory=lambda: _get_int("WARMUP_REPLIES", 20)
+    )
     # How often (seconds) the main loop polls each platform.
     poll_interval_seconds: int = field(
         default_factory=lambda: _get_int("POLL_INTERVAL_SECONDS", 300)

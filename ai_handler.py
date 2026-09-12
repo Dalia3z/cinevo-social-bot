@@ -154,10 +154,33 @@ class AIHandler:
             logger.error("DeepSeek API key is not configured.")
             return None
 
+        # Warm-up: for the first N replies, post GENUINE comments with NO link.
+        # YouTube holds replies from brand-new channels for review when they
+        # immediately post promotional links, so we build trust first. After N
+        # replies the link is included normally.
+        try:
+            from database import db
+
+            replies_so_far = db.count_replied(platform)
+        except Exception as exc:  # never let a DB hiccup break replies
+            logger.warning("Could not read reply count for warm-up: %s", exc)
+            replies_so_far = settings.warmup_replies  # assume warm-up done
+
+        in_warmup = replies_so_far < settings.warmup_replies
+        if in_warmup:
+            logger.info(
+                "Warm-up mode (%d/%d replies): posting WITHOUT link.",
+                replies_so_far,
+                settings.warmup_replies,
+            )
+
         # Decide whether THIS reply should include the website link. We include
-        # it most of the time (default 80%) so the bot actually drives traffic,
-        # but skip it occasionally so the account doesn't look like pure spam.
-        include_link = random.random() < settings.website_link_probability
+        # it most of the time (default 100%) so the bot actually drives traffic,
+        # but skip it during warm-up so the account doesn't look like pure spam.
+        include_link = (
+            not in_warmup
+            and random.random() < settings.website_link_probability
+        )
 
         payload = {
             "model": self.model,
