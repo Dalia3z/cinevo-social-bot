@@ -143,6 +143,9 @@ jobs:
           # --- Brand / website ---
           WEBSITE_URL: ${{ vars.WEBSITE_URL }}
           BRAND_NAME: ${{ vars.BRAND_NAME }}
+          # How often the website link appears in a reply (0.0 - 1.0).
+          # Defaults to 0.8 (80%) when the variable is not set.
+          WEBSITE_LINK_PROBABILITY: ${{ vars.WEBSITE_LINK_PROBABILITY }}
           # --- YouTube ---
           YOUTUBE_ENABLED: ${{ env.YOUTUBE_ENABLED }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}

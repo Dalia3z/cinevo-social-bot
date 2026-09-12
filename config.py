@@ -104,6 +104,12 @@ class Settings:
     brand_name: str = field(
         default_factory=lambda: _get_str("BRAND_NAME", "Cinevo")
     )
+    # How often (0.0 - 1.0) the website link should appear in a reply.
+    # 0.8 = 80% of replies include the link (default). Set to 1.0 to always
+    # include it, or 0.0 to never include it.
+    website_link_probability: float = field(
+        default_factory=lambda: _get_float("WEBSITE_LINK_PROBABILITY", 0.8)
+    )
 
     # ------------------------------------------------------------------ #
     # YouTube Data API v3
