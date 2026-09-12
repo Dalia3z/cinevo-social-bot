@@ -96,17 +96,30 @@ YOUTUBE_QUERIES = [
 # Curated seed channels (fallback / bootstrap when API key is absent).
 # These are REAL, well-known cinema/entertainment YouTube channel IDs so the
 # bot has valid targets even before running a full discovery pass.
+#
+# NOTE: channel IDs are stable and public. This list is intentionally large so
+# the bot has plenty of targets even without a YOUTUBE_API_KEY. Run
+# `python discover_targets.py --all --max 10000` to expand it further.
 YOUTUBE_SEED_CHANNELS = [
-    # Rotten Tomatoes (movie reviews)
+    # --- Movie/TV review & news outlets ---
     {"id": "UCi8e0iOVk1fEOogdfu4YgfA", "title": "Rotten Tomatoes"},
-    # IGN (movies, TV, entertainment)
     {"id": "UCKy1dAqELo0zrOtPkf0eTMw", "title": "IGN"},
-    # Screen Rant (movie/TV news & reviews)
     {"id": "UC2iUwfYi_1FCGGqhOUNx-iA", "title": "Screen Rant"},
-    # Looper (movie/TV explainers)
     {"id": "UCaWd5_7JhbQBe4dknZhsHJg", "title": "Looper"},
-    # CinemaSins (movie commentary)
     {"id": "UCYUQQgogVeQY8cMQamhHJcg", "title": "CinemaSins"},
+    {"id": "UC7v3-2K1N84V67IF-WTRG-Q", "title": "Collider"},
+    {"id": "UCg8rbF3g2AMX70yOd8vqIZg", "title": "Variety"},
+    {"id": "UCsTcErHg8oDvUnTzoqsYeNw", "title": "WatchMojo.com"},
+    {"id": "UC3sznuotAs2ohg_U__Jzj_Q", "title": "Film Theory"},
+    {"id": "UCoMdktPbSTixAyNGwb-UYkQ", "title": "The Film Theorists"},
+    # --- Streaming / studio channels ---
+    {"id": "UCWOA1ZGywLbqmigxE4Qlvuw", "title": "Netflix"},
+    {"id": "UCq0OueAsdxH6b8nyAspwViw", "title": "Marvel Entertainment"},
+    {"id": "UCjmJDM5pRKbUlVIzDYYWb6g", "title": "Warner Bros. Pictures"},
+    {"id": "UCz97F7dMxBNOfGYu3rx8aCw", "title": "Sony Pictures Entertainment"},
+    # --- Anime / manga ---
+    {"id": "UC6pGDc4bFGD1_36IKv3FnYg", "title": "Crunchyroll"},
+    {"id": "UCJ5v_MCY6GNUBTO8-D3XoAg", "title": "Funimation"},
 ]
 
 
