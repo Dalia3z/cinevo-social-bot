@@ -75,6 +75,9 @@ class YouTubeHandler:
         # Self-test the API key ONCE per cycle so the log clearly states
         # whether the key itself works, independent of the channel IDs.
         self._selftest_api_key()
+        # Self-test the OAuth token so we know up-front whether replies can
+        # actually be POSTED (reading only needs the API key).
+        self._selftest_oauth_token()
 
         # Build the set of video IDs to monitor: direct video targets plus the
         # recent uploads of discovered channels.
@@ -172,6 +175,55 @@ class YouTubeHandler:
             "(2) the YouTube Data API v3 is NOT enabled for this key's "
             "Google Cloud project, or (3) the key has HTTP referrer/IP "
             "restrictions that block server-side calls."
+        )
+
+    def _selftest_oauth_token(self) -> None:
+        """
+        Verify the OAuth token can actually POST (comments.insert requires the
+        `youtube.force-ssl` scope). We call a cheap authenticated endpoint
+        (`channels?part=snippet&mine=true`) which fails with 401 if the token
+        is invalid/expired. This makes the log unambiguous BEFORE we try to
+        post 20 replies and fail 20 times.
+        """
+        if not self.oauth_token:
+            logger.warning(
+                "YOUTUBE_OAUTH_TOKEN is not set. The bot can READ comments and "
+                "generate DeepSeek replies, but it CANNOT POST them. Add a "
+                "valid OAuth 2.0 token (scope 'youtube.force-ssl') as the "
+                "YOUTUBE_OAUTH_TOKEN secret to enable posting."
+            )
+            return
+
+        headers = {"Authorization": f"Bearer {self.oauth_token}"}
+        params = {"part": "snippet", "mine": "true"}
+        try:
+            resp = requests.get(
+                f"{API_BASE}/channels",
+                params=params,
+                headers=headers,
+                timeout=30,
+            )
+        except requests.exceptions.RequestException as exc:
+            logger.error("YouTube OAuth token self-test network error: %s", exc)
+            return
+
+        if resp.status_code == 200:
+            logger.info(
+                "YouTube OAuth token self-test: OK (token is valid and can "
+                "post replies)."
+            )
+            return
+
+        logger.error(
+            "YouTube OAuth token self-test FAILED (HTTP %s). Google says: %s",
+            resp.status_code,
+            resp.text[:500],
+        )
+        logger.error(
+            "The YOUTUBE_OAUTH_TOKEN secret is INVALID or EXPIRED. Posting "
+            "replies requires a valid OAuth 2.0 access token with the "
+            "'youtube.force-ssl' scope. Generate a fresh token and update the "
+            "secret. (Reading comments still works via the API key.)"
         )
 
     def _fetch_channel_uploads(self, channel_id: str) -> List[str]:
@@ -332,12 +384,32 @@ class YouTubeHandler:
             resp.raise_for_status()
             return True
         except requests.exceptions.HTTPError as exc:
-            logger.error(
-                "YouTube reply failed for %s: %s | %s",
-                item["item_id"],
-                exc,
-                resp.text[:500],
-            )
+            if resp.status_code == 401:
+                logger.error(
+                    "YouTube reply failed for %s: 401 Unauthorized. "
+                    "YOUTUBE_OAUTH_TOKEN is INVALID or EXPIRED. "
+                    "Posting replies requires a valid OAuth 2.0 access token "
+                    "with the 'youtube.force-ssl' scope. Generate a fresh "
+                    "token and update the YOUTUBE_OAUTH_TOKEN secret. "
+                    "Google says: %s",
+                    item["item_id"],
+                    resp.text[:500],
+                )
+            elif resp.status_code == 403:
+                logger.error(
+                    "YouTube reply failed for %s: 403 Forbidden. The OAuth "
+                    "token lacks the 'youtube.force-ssl' scope, or the quota "
+                    "is exceeded. Google says: %s",
+                    item["item_id"],
+                    resp.text[:500],
+                )
+            else:
+                logger.error(
+                    "YouTube reply failed for %s: %s | %s",
+                    item["item_id"],
+                    exc,
+                    resp.text[:500],
+                )
             return False
         except requests.exceptions.RequestException as exc:
             logger.error("YouTube reply network error: %s", exc)
