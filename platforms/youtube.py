@@ -44,6 +44,11 @@ class YouTubeHandler:
         self.channel_ids = targets_loader.get_merged_youtube_channel_ids()
         # OAuth token used only for posting replies (comments.insert).
         self.oauth_token = settings.youtube_oauth_token
+        # Long-lived refresh token + client credentials. When present, the bot
+        # mints a fresh access token automatically (access tokens expire ~1h).
+        self.oauth_refresh_token = settings.youtube_oauth_refresh_token
+        self.oauth_client_id = settings.youtube_oauth_client_id
+        self.oauth_client_secret = settings.youtube_oauth_client_secret
         self.max_items = settings.max_comments_per_cycle
         # Optional cap on how many targets to actually monitor this cycle.
         self.max_targets = settings.max_targets_per_platform
@@ -177,6 +182,67 @@ class YouTubeHandler:
             "restrictions that block server-side calls."
         )
 
+    def _refresh_access_token(self) -> bool:
+        """
+        Exchange the long-lived refresh token for a fresh access token.
+
+        Access tokens expire after ~1 hour, which is shorter than the gap
+        between scheduled GitHub Actions runs. When YOUTUBE_OAUTH_REFRESH_TOKEN
+        (plus client id/secret) is configured, we mint a new access token here
+        so posting keeps working unattended.
+
+        Returns True if a new access token was obtained.
+        """
+        if not (
+            self.oauth_refresh_token
+            and self.oauth_client_id
+            and self.oauth_client_secret
+        ):
+            return False
+
+        payload = {
+            "client_id": self.oauth_client_id,
+            "client_secret": self.oauth_client_secret,
+            "refresh_token": self.oauth_refresh_token,
+            "grant_type": "refresh_token",
+        }
+        try:
+            resp = requests.post(
+                "https://oauth2.googleapis.com/token", data=payload, timeout=30
+            )
+        except requests.exceptions.RequestException as exc:
+            logger.error("YouTube OAuth refresh network error: %s", exc)
+            return False
+
+        if resp.status_code != 200:
+            logger.error(
+                "YouTube OAuth refresh FAILED (HTTP %s). Google says: %s",
+                resp.status_code,
+                resp.text[:500],
+            )
+            logger.error(
+                "YOUTUBE_OAUTH_REFRESH_TOKEN / CLIENT_ID / CLIENT_SECRET are "
+                "invalid. Re-run the OAuth 2.0 Playground flow and update the "
+                "secrets."
+            )
+            return False
+
+        try:
+            new_token = resp.json().get("access_token", "")
+        except ValueError:
+            logger.error("YouTube OAuth refresh returned non-JSON body.")
+            return False
+
+        if not new_token:
+            logger.error("YouTube OAuth refresh returned no access_token.")
+            return False
+
+        self.oauth_token = new_token
+        logger.info(
+            "YouTube OAuth token refreshed successfully (valid ~1h)."
+        )
+        return True
+
     def _selftest_oauth_token(self) -> None:
         """
         Verify the OAuth token can actually POST (comments.insert requires the
@@ -184,7 +250,13 @@ class YouTubeHandler:
         (`channels?part=snippet&mine=true`) which fails with 401 if the token
         is invalid/expired. This makes the log unambiguous BEFORE we try to
         post 20 replies and fail 20 times.
+
+        If a refresh token is configured, we first mint a fresh access token
+        so an expired YOUTUBE_OAUTH_TOKEN does not break unattended runs.
         """
+        # Prefer a freshly-minted token when refresh credentials are present.
+        self._refresh_access_token()
+
         if not self.oauth_token:
             logger.warning(
                 "YOUTUBE_OAUTH_TOKEN is not set. The bot can READ comments and "

@@ -117,8 +117,11 @@ jobs:
             echo "::error::YOUTUBE_API_KEY secret is MISSING. Add it in Settings -> Secrets and variables -> Actions."
             missing=1
           fi
-          if [ -z "${YOUTUBE_OAUTH_TOKEN:-}" ]; then
-            echo "::warning::YOUTUBE_OAUTH_TOKEN secret is MISSING. The bot can READ comments but CANNOT POST replies."
+          if [ -z "${YOUTUBE_OAUTH_TOKEN:-}" ] && [ -z "${YOUTUBE_OAUTH_REFRESH_TOKEN:-}" ]; then
+            echo "::warning::Neither YOUTUBE_OAUTH_TOKEN nor YOUTUBE_OAUTH_REFRESH_TOKEN is set. The bot can READ comments but CANNOT POST replies."
+          fi
+          if [ -n "${YOUTUBE_OAUTH_REFRESH_TOKEN:-}" ] && { [ -z "${YOUTUBE_OAUTH_CLIENT_ID:-}" ] || [ -z "${YOUTUBE_OAUTH_CLIENT_SECRET:-}" ]; }; then
+            echo "::warning::YOUTUBE_OAUTH_REFRESH_TOKEN is set but CLIENT_ID/CLIENT_SECRET is missing; the token cannot be refreshed."
           fi
           if [ "$missing" -ne 0 ]; then
             echo "Aborting: required secrets are missing."
@@ -144,6 +147,9 @@ jobs:
           YOUTUBE_ENABLED: ${{ env.YOUTUBE_ENABLED }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           YOUTUBE_OAUTH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_TOKEN }}
+          YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_REFRESH_TOKEN }}
+          YOUTUBE_OAUTH_CLIENT_ID: ${{ secrets.YOUTUBE_OAUTH_CLIENT_ID }}
+          YOUTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRET }}
           YOUTUBE_VIDEO_IDS: ${{ vars.YOUTUBE_VIDEO_IDS }}
           YOUTUBE_CHANNEL_IDS: ${{ vars.YOUTUBE_CHANNEL_IDS }}
           # --- Meta (Facebook + Instagram) ---

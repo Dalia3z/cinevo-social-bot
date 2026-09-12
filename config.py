@@ -112,8 +112,23 @@ class Settings:
         default_factory=lambda: _get_str("YOUTUBE_API_KEY", "")
     )
     # OAuth 2.0 access token required to POST replies (comments.insert).
+    # NOTE: a raw access token expires after ~1 hour. For unattended runs
+    # (GitHub Actions cron) prefer the refresh-token trio below so the bot
+    # can mint a fresh access token automatically on every cycle.
     youtube_oauth_token: str = field(
         default_factory=lambda: _get_str("YOUTUBE_OAUTH_TOKEN", "")
+    )
+    # OAuth 2.0 refresh token (long-lived). When set together with the client
+    # id/secret, the bot exchanges it for a fresh access token automatically.
+    youtube_oauth_refresh_token: str = field(
+        default_factory=lambda: _get_str("YOUTUBE_OAUTH_REFRESH_TOKEN", "")
+    )
+    # OAuth 2.0 client credentials used for the refresh-token exchange.
+    youtube_oauth_client_id: str = field(
+        default_factory=lambda: _get_str("YOUTUBE_OAUTH_CLIENT_ID", "")
+    )
+    youtube_oauth_client_secret: str = field(
+        default_factory=lambda: _get_str("YOUTUBE_OAUTH_CLIENT_SECRET", "")
     )
     # Comma separated list of video IDs (Shorts) to monitor.
     youtube_video_ids: List[str] = field(default_factory=list)
