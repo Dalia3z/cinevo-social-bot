@@ -186,10 +186,14 @@ jobs:
         run: |
           echo "==================== BOT RUN SUMMARY ===================="
           if [ -f bot_run.log ]; then
-            echo "--- Lines mentioning DeepSeek / AI ---"
+            echo "--- DeepSeek calls ---"
+            ds_calls=$(grep -ciE "DeepSeek reply generated" bot_run.log || true)
+            echo "DeepSeek replies generated: ${ds_calls}"
             grep -iE "deepseek|ai reply|generated" bot_run.log || echo "(none - DeepSeek was never called)"
             echo "--- Lines mentioning comments / items ---"
             grep -iE "new comment|new item|no new" bot_run.log || echo "(none)"
+            echo "--- Replies posted ---"
+            grep -iE "Replied on|Replies posted" bot_run.log || echo "(none)"
             echo "--- Errors ---"
             grep -iE "error|failed|missing|aborting" bot_run.log || echo "(none)"
           else

@@ -98,19 +98,35 @@ class YouTubeHandler:
                 continue
 
             for c in comments:
-                comment_id = c.get("id")
+                # A commentThread item nests the actual comment under
+                # snippet.topLevelComment. The thread's own `id` is NOT the
+                # comment id we must reply to, and the text lives inside
+                # topLevelComment.snippet.textDisplay (NOT snippet.textDisplay).
+                thread_snippet = c.get("snippet", {})
+                top = thread_snippet.get("topLevelComment", {})
+                top_snippet = top.get("snippet", {})
+
+                # The real comment id (used by comments.insert parentId).
+                comment_id = top.get("id") or c.get("id")
                 if not comment_id:
                     continue
                 if db.is_replied(self.name, comment_id):
                     continue
-                snippet = c.get("snippet", {})
+
+                text = top_snippet.get("textDisplay", "") or top_snippet.get(
+                    "textOriginal", ""
+                )
+                if not text:
+                    # Nothing to reply to; skip silently (avoids wasted calls).
+                    continue
+
                 items.append(
                     {
                         "platform": self.name,
                         "item_id": comment_id,
                         "parent_id": video_id,
-                        "text": snippet.get("textDisplay", ""),
-                        "author": snippet.get("authorDisplayName", ""),
+                        "text": text,
+                        "author": top_snippet.get("authorDisplayName", ""),
                     }
                 )
                 if len(items) >= self.max_items:
@@ -337,6 +353,10 @@ class YouTubeHandler:
         """
         comment_text = item.get("text", "")
         if not comment_text:
+            logger.warning(
+                "Skipping YouTube comment %s: empty text (nothing to reply to).",
+                item.get("item_id"),
+            )
             return False
 
         reply = ai_handler.generate_reply(comment_text, "YouTube Shorts")

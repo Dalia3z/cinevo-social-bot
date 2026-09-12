@@ -156,6 +156,12 @@ class AIHandler:
         if not _validate_reply(reply):
             logger.warning("Generated reply failed validation.")
             return None
+        # Log success so the GitHub Actions run summary can prove DeepSeek
+        # was actually called (previously success was silent, which made the
+        # summary falsely report "DeepSeek was never called").
+        logger.info(
+            "DeepSeek reply generated for %s (%d chars).", platform, len(reply)
+        )
         return reply
 
 
