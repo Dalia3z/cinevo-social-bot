@@ -113,13 +113,22 @@ def main() -> int:
         help="Local port for the redirect URI (default: 8080)",
     )
     parser.add_argument(
+        "--redirect-uri",
+        default=None,
+        help=(
+            "Exact redirect URI registered on your OAuth client. "
+            "Defaults to http://localhost:<port>/ . Use this if your client "
+            "is a 'Web application' and you registered a different URI."
+        ),
+    )
+    parser.add_argument(
         "--no-browser",
         action="store_true",
         help="Do not try to open the browser automatically.",
     )
     args = parser.parse_args()
 
-    redirect_uri = f"http://localhost:{args.port}/"
+    redirect_uri = args.redirect_uri or f"http://localhost:{args.port}/"
 
     # 1) Start the loopback server BEFORE opening the browser so we never miss
     #    the redirect.
@@ -147,10 +156,18 @@ def main() -> int:
     print(f"Redirect URI : {redirect_uri}")
     print(f"Scope        : {SCOPE}")
     print()
-    print("IMPORTANT: make sure this redirect URI is registered on your OAuth")
-    print("client (Google Cloud Console -> Credentials -> your client ->")
-    print("Authorized redirect URIs). For a 'Desktop app' client it is allowed")
-    print("automatically.")
+    print("IMPORTANT: this EXACT redirect URI must be registered on your OAuth")
+    print("client, otherwise Google returns 'Error 400: redirect_uri_mismatch'.")
+    print()
+    print("How to register it:")
+    print("  1. Open https://console.cloud.google.com/apis/credentials")
+    print("  2. Click your OAuth 2.0 Client ID")
+    print("  3. Under 'Authorized redirect URIs' click 'ADD URI'")
+    print(f"  4. Paste EXACTLY: {redirect_uri}")
+    print("  5. Click SAVE, wait ~1 minute, then re-run this script.")
+    print()
+    print("NOTE: if your client is of type 'Desktop app', localhost is allowed")
+    print("      automatically and you can ignore the steps above.")
     print()
     print("Open this URL in your browser and approve access:")
     print()
