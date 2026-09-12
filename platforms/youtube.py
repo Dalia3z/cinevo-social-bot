@@ -215,16 +215,33 @@ class YouTubeHandler:
             return False
 
         if resp.status_code != 200:
+            body = resp.text[:500]
             logger.error(
                 "YouTube OAuth refresh FAILED (HTTP %s). Google says: %s",
                 resp.status_code,
-                resp.text[:500],
+                body,
             )
-            logger.error(
-                "YOUTUBE_OAUTH_REFRESH_TOKEN / CLIENT_ID / CLIENT_SECRET are "
-                "invalid. Re-run the OAuth 2.0 Playground flow and update the "
-                "secrets."
-            )
+            # `unauthorized_client` has a very specific meaning: the refresh
+            # token was issued by a DIFFERENT OAuth client than the
+            # client_id/client_secret we are using. They must all come from the
+            # SAME Google Cloud OAuth 2.0 client.
+            if "unauthorized_client" in body:
+                logger.error(
+                    "CAUSE: 'unauthorized_client' means the refresh token was "
+                    "issued by a DIFFERENT OAuth client than "
+                    "YOUTUBE_OAUTH_CLIENT_ID/SECRET. All three MUST belong to "
+                    "the SAME Google Cloud OAuth 2.0 client. Fix: open the "
+                    "OAuth 2.0 Playground, click the gear icon, tick 'Use your "
+                    "own OAuth credentials' and paste the SAME client id/secret "
+                    "you put in the secrets, then re-authorise and copy the new "
+                    "refresh token."
+                )
+            else:
+                logger.error(
+                    "YOUTUBE_OAUTH_REFRESH_TOKEN / CLIENT_ID / CLIENT_SECRET "
+                    "are invalid. Re-run the OAuth 2.0 Playground flow and "
+                    "update the secrets."
+                )
             return False
 
         try:
