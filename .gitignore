@@ -26,3 +26,8 @@ pm2-*.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Local debug dumps (never commit these)
+*_dump.txt
+reply*.txt
+thread_dump.txt

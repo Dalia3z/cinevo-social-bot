@@ -1,3 +1,0 @@
-HTTP 200
-items: 0
-RAW: {'kind': 'youtube#commentListResponse', 'etag': 'HQMuvzOIbYPI9tLmwCutAbOIZaQ', 'pageInfo': {'resultsPerPage': 25}, 'items': []}
