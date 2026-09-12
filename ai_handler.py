@@ -53,9 +53,10 @@ Return ONLY the reply text. No quotes, no prefixes, no explanations."""
 
 # Rule text used when the link SHOULD be included this time.
 _LINK_RULE_INCLUDE = (
-    "You MUST naturally mention the website {url} in this reply. Make it fit "
-    "the conversation (recommendations, where to watch, comparisons, etc.). "
-    "It must read as a helpful tip, not an ad."
+    "You MUST include the website {url} in this reply. This is mandatory. "
+    "Work it in naturally as a helpful recommendation (where to watch, "
+    "comparisons, more picks, etc.) so it reads as a tip, not an ad. "
+    "The reply is INVALID if the link is missing."
 )
 # Rule text used when the link should be skipped this time.
 _LINK_RULE_SKIP = (
@@ -191,6 +192,14 @@ class AIHandler:
             return None
 
         reply = _clean_reply(raw)
+
+        # Safety net: if we asked for the link but the model forgot it, append
+        # it ourselves so the promotion is guaranteed (this is what fixes the
+        # "empty talk, no website" complaint).
+        if include_link and settings.website_url.lower() not in reply.lower():
+            reply = f"{reply} More picks on {settings.website_url}"
+            logger.info("Link was missing; appended it to the reply.")
+
         if not _validate_reply(reply):
             logger.warning("Generated reply failed validation.")
             return None
