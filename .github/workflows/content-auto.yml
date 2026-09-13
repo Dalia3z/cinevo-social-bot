@@ -69,12 +69,15 @@ jobs:
 
       # Restore the content queue so we don't regenerate the same titles and
       # so the daily publish counter survives between runs.
+      #
+      # NOTE: the key is STABLE (no run id) so the cache is actually reused.
+      # A run-id key would create a brand-new cache every run and never hit.
       - name: Restore content queue from cache
         id: queue-cache
         uses: actions/cache@v4
         with:
           path: content_queue.db
-          key: content-queue-${{ github.run_id }}
+          key: content-queue-v1
           restore-keys: |
             content-queue-
 
@@ -117,9 +120,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Only save when we actually restored nothing (a cache hit is immutable,
+      # so re-saving the same key would fail with "already exists").
       - name: Save content queue to cache
-        if: always()
+        if: always() && steps.queue-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: content_queue.db
-          key: content-queue-${{ github.run_id }}
+          key: content-queue-v1
