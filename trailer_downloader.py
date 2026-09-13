@@ -80,6 +80,26 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 )
 
+#: Datacenter IPs (VPS) are frequently challenged by YouTube with
+#: "Sign in to confirm you're not a bot". Passing a Netscape-format cookies.txt
+#: exported from a logged-in browser is the standard, reliable workaround.
+#: Set TRAILER_COOKIES_FILE in .env to enable it.
+COOKIES_FILE = os.getenv("TRAILER_COOKIES_FILE", "").strip()
+
+#: Optional: route yt-dlp through a proxy (e.g. a residential proxy) when the
+#: VPS IP is blocked outright. Set TRAILER_PROXY in .env to enable it.
+PROXY_URL = os.getenv("TRAILER_PROXY", "").strip()
+
+
+def _auth_args() -> List[str]:
+    """Build the yt-dlp auth-related flags shared by probe and download."""
+    args: List[str] = []
+    if COOKIES_FILE and Path(COOKIES_FILE).is_file():
+        args += ["--cookies", COOKIES_FILE]
+    if PROXY_URL:
+        args += ["--proxy", PROXY_URL]
+    return args
+
 
 def _safe_name(text: str, max_len: int = 80) -> str:
     """Turn an arbitrary title into a filesystem-safe stem."""
@@ -283,6 +303,7 @@ class TrailerDownloader:
             "--format", FORMAT_SELECTOR,
             "--merge-output-format", "mp4",
             "--user-agent", USER_AGENT,
+            *_auth_args(),
             "--output", out_tmpl,
             "--print", "after_move:filepath",
             url,
@@ -347,7 +368,8 @@ class TrailerDownloader:
         cmd = [
             *ytdlp.split(),
             "--no-playlist", "--no-warnings", "--skip-download",
-            "--dump-single-json", "--user-agent", USER_AGENT, url,
+            "--dump-single-json", "--user-agent", USER_AGENT,
+            *_auth_args(), url,
         ]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -373,6 +395,7 @@ class TrailerDownloader:
             f"ytsearch{limit}:{query}",
             "--no-playlist", "--no-warnings", "--skip-download",
             "--dump-json", "--user-agent", USER_AGENT,
+            *_auth_args(),
         ]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)

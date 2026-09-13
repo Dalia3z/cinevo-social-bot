@@ -376,6 +376,17 @@ class Settings:
     trailer_attribution: bool = field(
         default_factory=lambda: _get_bool("TRAILER_ATTRIBUTION", True)
     )
+    # Netscape-format cookies.txt exported from a logged-in browser. REQUIRED
+    # on datacenter IPs (VPS) where YouTube answers with "Sign in to confirm
+    # you're not a bot". Leave empty to disable.
+    trailer_cookies_file: str = field(
+        default_factory=lambda: _get_str("TRAILER_COOKIES_FILE", "")
+    )
+    # Optional proxy (http://user:pass@host:port) for when the VPS IP is
+    # blocked outright and cookies alone are not enough.
+    trailer_proxy: str = field(
+        default_factory=lambda: _get_str("TRAILER_PROXY", "")
+    )
 
     # Master kill-switch for the whole bot.
     bot_enabled: bool = field(
