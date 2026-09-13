@@ -463,6 +463,101 @@ python content_cli.py publish 1 --video content_videos/Inception.mp4
 
 ---
 
+## 🎞️ نظام الفيديو الحقيقي على VPS (Trailers رسمية)
+
+هاد النظام **منفصل تماماً** على GitHub Actions: كيخدم على **VPS ديالك**، وكيستعمل
+**مقاطع حقيقية** من الـ trailers الرسمية ديال YouTube.
+
+### ⚠️ تحذير قانوني — اقرأ هادشي قبل ما تفعّل
+
+- الـ trailers كتنشرها الاستوديوهات للترويج، ولكن **إعادة استعمالها ماشي بلا خطر**.
+- **Content ID** ديال YouTube **أوتوماتيكي** وكيقدر يدّعي الفيديو حتى لو كان المقطع 3 ثواني.
+- **3 strikes = القناة كتّسد**. وإلا كانت نفس القناة ديال ردود البوت، غادي يموت حتى البوت.
+- التحويلات (Ken Burns، color grade، mirror، speed ramp) **كتنقص** احتمال المطابقة،
+  ولكن **ما كتلغيها**. هادشي ماشي ضمانة.
+
+> **التوصية**: خلّي `CONTENT_PRIVACY=unlisted` حتى تشوف 5-10 فيديوهات وتتأكد.
+
+### 📁 الملفات
+
+| الملف | الوظيفة |
+|-------|---------|
+| [`trailer_downloader.py`](trailer_downloader.py) | تحميل الـ trailer الرسمي عبر `yt-dlp` (مع cache على القرص) |
+| [`clip_processor.py`](clip_processor.py) | تقطيع 3-5 ثواني + التحويلات (Ken Burns / grade / mirror / speed) |
+| [`video_composer.py`](video_composer.py) | تجميع المقاطع + النص + الصوت + الموسيقى |
+| [`vps_runner.py`](vps_runner.py) | المنسّق: download → clip → compose → publish |
+| [`setup_vps.sh`](setup_vps.sh) | مثبّت VPS كامل (FFmpeg، venv، yt-dlp، systemd) |
+| [`deploy.sh`](deploy.sh) | نسخ المشروع من الحاسوب ديالك للـ VPS + تشغيل الـ timer |
+
+### 🛡️ بوابات الأمان (كلها إجبارية)
+
+| البوابة | الافتراضي | الوظيفة |
+|---------|-----------|---------|
+| `TRAILER_ENABLED` | `false` | قاطع رئيسي لهاد النظام فقط |
+| `CONTENT_ENABLED` | `false` | القاطع المشترك مع نظام المحتوى |
+| `CONTENT_AUTO_PUBLISH` | `false` | موافقة صريحة على النشر |
+| `CONTENT_DAILY_PUBLISH_LIMIT` | `1` | سقف يومي صارم |
+| `--no-publish` / `--dry-run` | — | تجاوز لكل دورة |
+
+### 🚀 التركيب على VPS
+
+```bash
+# 1) من الحاسوب ديالك: نسخ المشروع + تثبيت كلشي على VPS
+bash deploy.sh root@IP_DIAL_VPS
+
+# 2) على الـ VPS: عمّر الأسرار
+ssh root@IP_DIAL_VPS 'sudo nano /opt/cinevo/.env'
+#    DEEPSEEK_API_KEY + YOUTUBE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN
+
+# 3) معاينة آمنة (كيمونتاج الفيديو، ما كينشرش)
+ssh root@IP_DIAL_VPS 'sudo -u cinevo /opt/cinevo/.venv/bin/python \
+  /opt/cinevo/vps_runner.py --no-publish --title "Sinister"'
+
+# 4) منين تعجبك النتيجة: فعّل النشر + شغّل الـ timer
+ssh root@IP_DIAL_VPS "sudo sed -i 's/^CONTENT_AUTO_PUBLISH=.*/CONTENT_AUTO_PUBLISH=true/' /opt/cinevo/.env"
+ssh root@IP_DIAL_VPS 'sudo systemctl start cinevo-trailer.timer'
+
+# 5) تتبع اللوغ
+ssh root@IP_DIAL_VPS 'tail -f /opt/cinevo/logs/trailer.log'
+```
+
+### 🧰 الأوامر (محلياً أو على VPS)
+
+```bash
+# فحص واش كلشي واجد (yt-dlp، FFmpeg، الخط، البوابات)
+python content_cli.py trailer-check
+
+# تحميل trailer رسمي (أو البحث عليه)
+python content_cli.py trailer-fetch --url "https://www.youtube.com/watch?v=XXXX"
+python content_cli.py trailer-fetch --search "Sinister official trailer"
+
+# تقطيع مقاطع محوّلة من trailer موجود
+python content_cli.py trailer-clips --input trailer_clips/Sinister.mp4 --count 5
+
+# تشغيل الأنبوب كامل
+python content_cli.py trailer-run --no-publish --title "Sinister"
+python content_cli.py trailer-run --dry-run
+```
+
+### ⚙️ إعدادات `.env` الأساسية
+
+| المتغير | الافتراضي | الوصف |
+|---------|-----------|-------|
+| `TRAILER_ENABLED` | `false` | القاطع الرئيسي |
+| `TRAILER_CLIP_SECONDS` | `3.5` | طول كل مقطع |
+| `TRAILER_CLIPS_PER_VIDEO` | `5` | عدد المقاطع فالفيديو |
+| `TRAILER_KEN_BURNS` | `true` | زووم/بان بطيء |
+| `TRAILER_COLOR_GRADE` | `true` | تدريج لوني سينمائي |
+| `TRAILER_MIRROR` | `false` | قلب أفقي (الأقوى فالتفادي) |
+| `TRAILER_SPEED_RAMP` | `false` | تغيير سرعة طفيف |
+| `TRAILER_TITLES` | — | عناوين مفصولة بفواصل (اختياري) |
+| `TRAILER_SOURCE_URLS` | — | روابط trailers جاهزة (اختياري) |
+| `TRAILER_ATTRIBUTION` | `true` | إضافة رابط المصدر فالوصف |
+
+> **ملاحظة**: `trailer_clips/` و `trailer_output/` و `*.mp3` مُستثنيان في `.gitignore`.
+
+---
+
 ## 🩺 حل المشاكل (Troubleshooting)
 
 ### 1) البوت لا يعمل / DeepSeek usage = 0

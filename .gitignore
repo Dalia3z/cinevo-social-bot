@@ -27,6 +27,14 @@ content_queue.db-shm
 content_videos/
 *.mp4
 
+# VPS trailer pipeline (large binaries; never commit these)
+trailer_clips/
+trailer_output/
+.compose_work/
+*.mp3
+*.m4a
+*.wav
+
 # PM2
 pm2-*.log
 *.pid

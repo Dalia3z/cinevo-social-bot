@@ -310,6 +310,73 @@ class Settings:
         default_factory=lambda: _get_str("CONTENT_CATEGORY_ID", "24")
     )
 
+    # ------------------------------------------------------------------ #
+    # VPS trailer pipeline (real footage from official YouTube trailers)
+    # ------------------------------------------------------------------ #
+    # NOTE: this pipeline is meant to run on a VPS, NOT on GitHub Actions.
+    # It downloads official trailers with yt-dlp, cuts short clips out of
+    # them, applies transformations (Ken Burns / colour grade / mirror /
+    # speed ramp) and composes a vertical Short. See README for the
+    # copyright discussion -- this is NOT risk-free.
+    #
+    # MASTER KILL-SWITCH for the trailer pipeline ONLY.
+    trailer_enabled: bool = field(
+        default_factory=lambda: _get_bool("TRAILER_ENABLED", False)
+    )
+    # Where downloaded source trailers are cached (git-ignored).
+    trailer_clips_dir: str = field(
+        default_factory=lambda: _get_str("TRAILER_CLIPS_DIR", "trailer_clips")
+    )
+    # Where the cut/transformed clips are written (git-ignored).
+    trailer_output_dir: str = field(
+        default_factory=lambda: _get_str("TRAILER_OUTPUT_DIR", "trailer_output")
+    )
+    # Timeout (seconds) for a single yt-dlp download. Trailers are small but
+    # a slow VPS link can take a while; 600s is generous.
+    trailer_download_timeout: int = field(
+        default_factory=lambda: _get_int("TRAILER_DOWNLOAD_TIMEOUT", 600)
+    )
+    # Length (seconds) of each cut clip. Shorts work best with 2-4s cuts.
+    trailer_clip_seconds: float = field(
+        default_factory=lambda: _get_float("TRAILER_CLIP_SECONDS", 3.5)
+    )
+    # How many clips to cut from a single trailer.
+    trailer_clips_per_video: int = field(
+        default_factory=lambda: _get_int("TRAILER_CLIPS_PER_VIDEO", 5)
+    )
+    # How many trailers to download per run.
+    trailer_downloads_per_run: int = field(
+        default_factory=lambda: _get_int("TRAILER_DOWNLOADS_PER_RUN", 2)
+    )
+    # Comma separated list of trailer URLs to use (optional). When empty the
+    # runner falls back to searching YouTube for "<title> official trailer".
+    trailer_source_urls: List[str] = field(default_factory=list)
+    # Comma separated list of movie/TV titles to build videos around.
+    trailer_titles: List[str] = field(default_factory=list)
+    # Transformation toggles. All default ON: the more the footage is
+    # transformed, the weaker a Content ID match tends to be.
+    trailer_ken_burns: bool = field(
+        default_factory=lambda: _get_bool("TRAILER_KEN_BURNS", True)
+    )
+    trailer_color_grade: bool = field(
+        default_factory=lambda: _get_bool("TRAILER_COLOR_GRADE", True)
+    )
+    trailer_mirror: bool = field(
+        default_factory=lambda: _get_bool("TRAILER_MIRROR", False)
+    )
+    trailer_speed_ramp: bool = field(
+        default_factory=lambda: _get_bool("TRAILER_SPEED_RAMP", False)
+    )
+    # Optional royalty-free music bed for the composed video.
+    trailer_music_path: str = field(
+        default_factory=lambda: _get_str("TRAILER_MUSIC_PATH", "")
+    )
+    # Attribution: append the source trailer URL to the description. Keeps
+    # the upload honest and is a small goodwill gesture with rights holders.
+    trailer_attribution: bool = field(
+        default_factory=lambda: _get_bool("TRAILER_ATTRIBUTION", True)
+    )
+
     # Master kill-switch for the whole bot.
     bot_enabled: bool = field(
         default_factory=lambda: _get_bool("BOT_ENABLED", True)
@@ -369,6 +436,10 @@ class Settings:
         self.tiktok_video_ids = self._split_list(os.getenv("TIKTOK_VIDEO_IDS", ""))
         self.quora_topics = self._split_list(os.getenv("QUORA_TOPICS", ""))
         self.active_platforms = self._split_list(os.getenv("ACTIVE_PLATFORMS", ""))
+        self.trailer_source_urls = self._split_list(
+            os.getenv("TRAILER_SOURCE_URLS", "")
+        )
+        self.trailer_titles = self._split_list(os.getenv("TRAILER_TITLES", ""))
 
     @staticmethod
     def _split_list(raw: Optional[str]) -> List[str]:

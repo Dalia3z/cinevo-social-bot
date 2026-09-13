@@ -46,6 +46,7 @@ import io
 import logging
 import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import List
 
 # Make stdout UTF-8 safe on Windows (cp1252 would crash on emoji/Arabic).
@@ -270,6 +271,103 @@ def cmd_publish(args) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# VPS trailer pipeline commands
+# --------------------------------------------------------------------------- #
+def cmd_trailer_check(args) -> int:
+    """Report whether the VPS trailer pipeline can run here."""
+    from clip_processor import clip_processor
+    from trailer_downloader import trailer_downloader
+    from video_composer import video_composer
+
+    print(f"TRAILER_ENABLED      : {getattr(settings, 'trailer_enabled', False)}")
+    print(f"CONTENT_ENABLED      : {settings.content_enabled}")
+    print(f"CONTENT_AUTO_PUBLISH : {settings.content_auto_publish}")
+    print(f"privacy              : {settings.content_privacy}")
+    print(f"daily limit          : {settings.content_daily_publish_limit}")
+    print(f"published today      : {publish_queue.published_today()}")
+    print(f"clips dir            : {settings.trailer_clips_dir}")
+    print(f"output dir           : {settings.trailer_output_dir}")
+    print(f"clip seconds         : {settings.trailer_clip_seconds}")
+    print(f"clips per video      : {settings.trailer_clips_per_video}")
+    print(f"yt-dlp available     : {trailer_downloader.available()}")
+    print(f"ffmpeg (clips)       : {clip_processor.available()}")
+    print(f"ffmpeg (compose)     : {video_composer.available()}")
+    print(f"font                 : {video_composer.font or 'NOT FOUND'}")
+
+    ready = (
+        getattr(settings, "trailer_enabled", False)
+        and trailer_downloader.available()
+        and clip_processor.available()
+        and video_composer.available()
+    )
+    print(f"\nPIPELINE READY       : {ready}")
+    return 0 if ready else 1
+
+
+def cmd_trailer_fetch(args) -> int:
+    """Download an official trailer (or search for one)."""
+    from trailer_downloader import trailer_downloader
+
+    if not trailer_downloader.available():
+        logger.error("yt-dlp is not available. Install it: pip install yt-dlp")
+        return 1
+
+    if args.search:
+        results = trailer_downloader.search(args.search, limit=args.limit)
+        if not results:
+            print("No results.")
+            return 1
+        for item in results:
+            print(f"{item.get('url', '')}  {item.get('title', '')}")
+        return 0
+
+    if not args.url:
+        logger.error("Provide --url URL or --search \"query\".")
+        return 1
+
+    info = trailer_downloader.fetch(args.url, stem=args.stem or None, force=args.force)
+    if not info:
+        logger.error("Download failed.")
+        return 1
+    print(f"Downloaded: {info.path}")
+    print(f"  title   : {info.title}")
+    print(f"  channel : {info.channel}")
+    print(f"  duration: {info.duration:.1f}s")
+    return 0
+
+
+def cmd_trailer_clips(args) -> int:
+    """Cut transformed clips out of a downloaded trailer."""
+    from clip_processor import clip_processor
+
+    if not clip_processor.available():
+        logger.error(
+            "Clip processing is unavailable (FFmpeg missing or TRAILER_ENABLED=false)."
+        )
+        return 1
+
+    clips = clip_processor.process(
+        Path(args.input), count=args.count, force=args.force
+    )
+    if not clips:
+        logger.error("No clips produced.")
+        return 1
+    for clip in clips:
+        print(f"{clip.path}  start={clip.start}s grade={clip.grade or 'none'}")
+    return 0
+
+
+def cmd_trailer_run(args) -> int:
+    """Run the full trailer pipeline (download -> clip -> compose -> publish)."""
+    from vps_runner import VpsRunner
+
+    runner = VpsRunner(dry_run=args.dry_run, no_publish=args.no_publish)
+    published = runner.run(count=args.count, forced_title=args.title)
+    print(f"Published {published} video(s).")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # CLI wiring
 # --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
@@ -342,6 +440,45 @@ def build_parser() -> argparse.ArgumentParser:
     p_pub.add_argument("id", type=int, help="Content id.")
     p_pub.add_argument("--video", required=True, help="Path to the rendered MP4.")
     p_pub.set_defaults(func=cmd_publish)
+
+    # ------------------------------------------------------------------ #
+    # VPS trailer pipeline
+    # ------------------------------------------------------------------ #
+    p_tcheck = sub.add_parser(
+        "trailer-check", help="Check whether the trailer pipeline can run."
+    )
+    p_tcheck.set_defaults(func=cmd_trailer_check)
+
+    p_tfetch = sub.add_parser(
+        "trailer-fetch", help="Download an official trailer (yt-dlp)."
+    )
+    p_tfetch.add_argument("--url", default="", help="Trailer URL.")
+    p_tfetch.add_argument("--search", default="", help="Search query instead.")
+    p_tfetch.add_argument("--stem", default="", help="Output filename stem.")
+    p_tfetch.add_argument("--limit", type=int, default=5, help="Search results.")
+    p_tfetch.add_argument("--force", action="store_true", help="Re-download.")
+    p_tfetch.set_defaults(func=cmd_trailer_fetch)
+
+    p_tclips = sub.add_parser(
+        "trailer-clips", help="Cut transformed clips from a trailer."
+    )
+    p_tclips.add_argument("--input", required=True, help="Source trailer path.")
+    p_tclips.add_argument("--count", type=int, default=None, help="How many clips.")
+    p_tclips.add_argument("--force", action="store_true", help="Re-encode.")
+    p_tclips.set_defaults(func=cmd_trailer_clips)
+
+    p_trun = sub.add_parser(
+        "trailer-run", help="Run the full trailer pipeline end to end."
+    )
+    p_trun.add_argument("--count", type=int, default=1, help="How many videos.")
+    p_trun.add_argument("--title", default=None, help="Force a specific title.")
+    p_trun.add_argument(
+        "--no-publish", action="store_true", help="Render only; never upload."
+    )
+    p_trun.add_argument(
+        "--dry-run", action="store_true", help="Show what would happen; do nothing."
+    )
+    p_trun.set_defaults(func=cmd_trailer_run)
 
     return parser
 
