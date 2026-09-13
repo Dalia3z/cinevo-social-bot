@@ -189,11 +189,15 @@ class VpsRunner:
         try:
             # video_maker exposes a private helper; call it defensively so a
             # future refactor degrades to "no voiceover" instead of crashing.
+            #
+            # NOTE: video_maker._make_voiceover(text, out_path) returns a *bool*
+            # (True on success) and writes the MP3 to `out_path`. It does NOT
+            # return the path, so we must return `out` ourselves.
             maker = video_maker
             out = work_dir / "voiceover.mp3"
-            result = maker._make_voiceover(script, out)  # type: ignore[attr-defined]
-            if result and Path(result).is_file():
-                return Path(result)
+            ok = maker._make_voiceover(script, str(out))  # type: ignore[attr-defined]
+            if ok and out.is_file() and out.stat().st_size > 0:
+                return out
         except Exception as exc:  # noqa: BLE001 - never let audio break a run
             logger.warning("Voiceover generation failed: %s", exc)
         return None
