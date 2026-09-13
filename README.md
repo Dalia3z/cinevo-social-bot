@@ -44,6 +44,10 @@ cinevo-social-bot/
 │   ├── meta.py              # Facebook + Instagram (Graph API)
 │   ├── tiktok.py            # TikTok
 │   └── quora.py             # Quora
+├── content_generator.py     # 🆕 توليد سكريبتات/كابشنات الفيديوهات القصيرة (AI)
+├── content_planner.py       # 🆕 تقويم المحتوى اليومي + اختيار الأفلام
+├── publish_queue.py         # 🆕 طابور SQLite للمحتوى (draft → ready → posted)
+├── content_cli.py           # 🆕 واجهة أوامر لنظام المحتوى (لا تنشر تلقائياً)
 └── logs/                    # ملفات السجل
 ```
 
@@ -300,6 +304,84 @@ python discover_targets.py --platform youtube --max 10000
 2. اذهب إلى تبويب **Actions** → اختر **Cinevo Bot (scheduled)** →
    **Run workflow** (تشغيل يدوي للتجربة)
 3. اقرأ خطوة **Run summary** — يجب أن ترى `DeepSeek calls` أكبر من صفر.
+
+---
+
+## 🎥 نظام المحتوى القصير (TikTok / YouTube Shorts)
+
+> **معزول تماماً**: هذا النظام **منفصل 100%** عن بوت الرد على التعليقات.
+> لا يشارك معه أي قاعدة بيانات، ولا ينشر أي شيء تلقائياً. تشغيله لا يؤثر
+> إطلاقاً على حلقة الردود على YouTube.
+
+### الفكرة
+
+بدل انتظار التعليقات، هذا النظام **يولّد محتوى فيديو قصير جاهز** (Hook +
+سكريبت + نص على الشاشة + كابشن + هاشتاغات + CTA) لأفلام/مسلسلات مناسبة
+لموقع Cinevo. أنت تصوّر/تنشر يدوياً على TikTok و YouTube Shorts.
+
+### الملفات
+
+| الملف | الوظيفة |
+|-------|---------|
+| [`content_generator.py`](content_generator.py) | توليد الحزمة الكاملة عبر DeepSeek (JSON mode) |
+| [`content_planner.py`](content_planner.py) | تقويم يومي + 8 زوايا محتوى + بنك أفلام منسّق |
+| [`publish_queue.py`](publish_queue.py) | طابور SQLite منفصل (`content_queue.db`) |
+| [`content_cli.py`](content_cli.py) | واجهة الأوامر (لا تنشر تلقائياً) |
+
+### الأوامر
+
+```bash
+# 1) عرض تقويم محتوى لعدة أيام (بدون توليد AI)
+python content_cli.py plan --days 7
+
+# 2) توليد حزمة كاملة لفيلم معيّن وحفظها في الطابور
+python content_cli.py generate --title "Inception" --angle ending_explained
+
+# 3) عرض كل العناصر في الطابور
+python content_cli.py list
+python content_cli.py list --status ready
+
+# 4) عرض عنصر واحد (سكريبت + نص على الشاشة)
+python content_cli.py show --id 1
+
+# 5) تصدير الكابشن + الهاشتاغات للنسخ واللصق
+python content_cli.py export --id 1
+
+# 6) تحديث الحالة بعد النشر
+python content_cli.py mark --id 1 --status posted --platform tiktok \
+    --url "https://www.tiktok.com/@cinevo/video/123"
+
+# 7) إحصائيات الطابور
+python content_cli.py stats
+```
+
+### دورة حياة العنصر
+
+```
+draft  →  ready  →  posted
+              ↘  skipped
+```
+
+- **draft**: تم توليده، لم يُراجَع بعد.
+- **ready**: راجعته وأنت جاهز للتصوير/النشر.
+- **posted**: نشرته (مع رابط اختياري).
+- **skipped**: قررت عدم استخدامه.
+
+### زوايا المحتوى (8)
+
+`hidden_gem`, `plot_twist`, `best_scene`, `ending_explained`,
+`if_you_liked`, `true_story`, `one_take`, `watch_tonight`.
+
+### إعدادات `.env`
+
+| المتغير | الافتراضي | الوصف |
+|---------|-----------|-------|
+| `CONTENT_LANGUAGE` | `English` | لغة السكريبتات والكابشنات |
+| `CONTENT_POSTS_PER_DAY` | `3` | عدد المنشورات في التقويم اليومي |
+| `CONTENT_MAX_TOKENS` | `1200` | حد التوكنات لتوليد واحد |
+| `CONTENT_TEMPERATURE` | `0.9` | درجة الإبداع (0.0–1.0) |
+
+> **ملاحظة**: `content_queue.db` ملف وقت التشغيل ومُستثنى في `.gitignore`.
 
 ---
 

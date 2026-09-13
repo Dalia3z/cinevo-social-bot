@@ -241,6 +241,29 @@ class Settings:
     max_comments_per_video: int = field(
         default_factory=lambda: _get_int("MAX_COMMENTS_PER_VIDEO", 2)
     )
+
+    # ------------------------------------------------------------------ #
+    # Short-form content system (TikTok / YouTube Shorts)
+    # ------------------------------------------------------------------ #
+    # NOTE: This subsystem is COMPLETELY SEPARATE from the comment-reply bot.
+    # It only generates text (scripts/captions) via content_cli.py and never
+    # posts automatically, so it cannot affect the engagement loop.
+    # Language for generated hooks/scripts/captions (hashtags stay English).
+    content_language: str = field(
+        default_factory=lambda: _get_str("CONTENT_LANGUAGE", "English")
+    )
+    # How many short videos to plan per day.
+    content_posts_per_day: int = field(
+        default_factory=lambda: _get_int("CONTENT_POSTS_PER_DAY", 3)
+    )
+    # Max tokens for content generation (scripts are longer than replies).
+    content_max_tokens: int = field(
+        default_factory=lambda: _get_int("CONTENT_MAX_TOKENS", 1200)
+    )
+    # Temperature for content generation (higher = more creative).
+    content_temperature: float = field(
+        default_factory=lambda: _get_float("CONTENT_TEMPERATURE", 0.9)
+    )
     # Master kill-switch for the whole bot.
     bot_enabled: bool = field(
         default_factory=lambda: _get_bool("BOT_ENABLED", True)

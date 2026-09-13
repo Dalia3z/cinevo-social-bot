@@ -18,6 +18,10 @@ venv/
 *.db-shm
 logs/
 quora_queue/
+# Short-form content queue (runtime artifact, regenerated locally)
+content_queue.db
+content_queue.db-wal
+content_queue.db-shm
 
 # PM2
 pm2-*.log
