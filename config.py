@@ -264,6 +264,52 @@ class Settings:
     content_temperature: float = field(
         default_factory=lambda: _get_float("CONTENT_TEMPERATURE", 0.9)
     )
+
+    # ------------------------------------------------------------------ #
+    # Short-form VIDEO generation + auto-publish (TikTok / YouTube Shorts)
+    # ------------------------------------------------------------------ #
+    # MASTER KILL-SWITCH for the video/auto-publish subsystem ONLY.
+    # Set CONTENT_ENABLED=false to instantly stop video generation and
+    # auto-publishing WITHOUT touching the comment-reply bot.
+    content_enabled: bool = field(
+        default_factory=lambda: _get_bool("CONTENT_ENABLED", False)
+    )
+    # AUTO-PUBLISH switch. Even when CONTENT_ENABLED=true, publishing stays
+    # OFF unless this is explicitly true. This is the second safety gate so a
+    # misconfiguration can never post to the live channel by accident.
+    content_auto_publish: bool = field(
+        default_factory=lambda: _get_bool("CONTENT_AUTO_PUBLISH", False)
+    )
+    # Hard daily cap on how many videos may be PUBLISHED per day. Kept at 1 by
+    # default to minimise risk to the shared channel.
+    content_daily_publish_limit: int = field(
+        default_factory=lambda: _get_int("CONTENT_DAILY_PUBLISH_LIMIT", 1)
+    )
+    # Where rendered MP4 files are written (git-ignored).
+    content_video_dir: str = field(
+        default_factory=lambda: _get_str("CONTENT_VIDEO_DIR", "content_videos")
+    )
+    # Optional background music file (must be royalty-free). Empty = no music.
+    content_music_path: str = field(
+        default_factory=lambda: _get_str("CONTENT_MUSIC_PATH", "")
+    )
+    # Voiceover: enable/disable + the edge-tts voice name.
+    content_enable_voice: bool = field(
+        default_factory=lambda: _get_bool("CONTENT_ENABLE_VOICE", True)
+    )
+    content_voice: str = field(
+        default_factory=lambda: _get_str("CONTENT_VOICE", "en-US-AriaNeural")
+    )
+    # YouTube privacy for auto-published videos: public | unlisted | private.
+    # Defaults to `unlisted` so you can review before making it public.
+    content_privacy: str = field(
+        default_factory=lambda: _get_str("CONTENT_PRIVACY", "unlisted")
+    )
+    # YouTube category id (24 = Entertainment).
+    content_category_id: str = field(
+        default_factory=lambda: _get_str("CONTENT_CATEGORY_ID", "24")
+    )
+
     # Master kill-switch for the whole bot.
     bot_enabled: bool = field(
         default_factory=lambda: _get_bool("BOT_ENABLED", True)

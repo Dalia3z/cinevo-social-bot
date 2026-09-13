@@ -385,6 +385,84 @@ draft  →  ready  →  posted
 
 ---
 
+## 🎬 توليد الفيديو + النشر التلقائي (YouTube Shorts)
+
+> **⚠️ تنبيه مهم**: هذا النظام يعمل على **نفس القناة** المربوطة بالبوت.
+> لهذا السبب كل شيء **مغلق افتراضياً** (kill-switch) ولا يمكن أن ينشر أي
+> شيء إلا إذا فعّلته أنت صراحةً. الفيديوهات **نصية متحركة** (بلا مقاطع
+> أفلام) = محتوى أصلي 100% ولا يمكن أن يُطالب بحقوقه (Content ID).
+
+### الملفات
+
+| الملف | الوظيفة |
+|-------|---------|
+| [`video_maker.py`](video_maker.py) | توليد فيديو عمودي 1080×1920 عبر FFmpeg (نص متحرك + صوت) |
+| [`youtube_uploader.py`](youtube_uploader.py) | النشر على YouTube Shorts عبر OAuth + بوابات أمان |
+| [`content_auto.py`](content_auto.py) | المنسّق: خطة → توليد → فيديو → نشر |
+| [`.github/workflows/content-auto.yml`](.github/workflows/content-auto.yml) | تشغيل يومي تلقائي |
+
+### 🛡️ بوابات الأمان (كلها إجبارية)
+
+```mermaid
+flowchart LR
+    A["CONTENT_ENABLED"] --> B["CONTENT_AUTO_PUBLISH"]
+    B --> C["الحد اليومي"]
+    C --> D["OAuth موجود"]
+    D --> E["نشر ✅"]
+    style A fill:#7a0000,color:#fff
+    style E fill:#2d5016,color:#fff
+```
+
+| البوابة | الافتراضي | الوظيفة |
+|---------|-----------|---------|
+| `CONTENT_ENABLED` | `false` | مفتاح الإيقاف الكامل للنظام |
+| `CONTENT_AUTO_PUBLISH` | `false` | موافقة صريحة على النشر |
+| `CONTENT_DAILY_PUBLISH_LIMIT` | `1` | حد أقصى للنشر يومياً |
+| `CONTENT_PRIVACY` | `unlisted` | الفيديو غير مدرج حتى تراجعه |
+
+**إلا كانت أي بوابة مغلقة → لا يتم أي نشر.** الفيديو كيتولّد ويبقى محفوظاً.
+
+### الأوامر
+
+```bash
+# معاينة ما سيحدث (بلا أي تنفيذ)
+python content_auto.py --dry-run
+
+# توليد + مونتاج فقط (بلا نشر)
+python content_auto.py --no-publish
+
+# التشغيل الكامل (يحترم كل البوابات)
+python content_auto.py
+
+# توليد فيديو لعنصر موجود في الطابور
+python content_cli.py video 1 --mark-ready
+
+# نشر فيديو مُنتَج يدوياً
+python content_cli.py publish 1 --video content_videos/Inception.mp4
+```
+
+### التشغيل التلقائي على GitHub Actions
+
+الـ workflow [`content-auto.yml`](.github/workflows/content-auto.yml) كيخدم **يومياً**:
+
+1. كيولّد سكريبت (DeepSeek).
+2. كيمونتاج فيديو (FFmpeg + صوت edge-tts).
+3. كيرفع الفيديو كـ **artifact** (باش تشوفو).
+4. كينشر على YouTube **إلا** كانت البوابات مفتوحة.
+
+**باش تفعّله**، أضف في GitHub → Settings → **Variables**:
+
+| Variable | القيمة |
+|----------|--------|
+| `CONTENT_ENABLED` | `true` |
+| `CONTENT_AUTO_PUBLISH` | `true` (إلا بغيت غير المونتاج) |
+| `CONTENT_DAILY_PUBLISH_LIMIT` | `1` |
+| `CONTENT_PRIVACY` | `unlisted` |
+
+> **ملاحظة**: `content_videos/` و `content_queue.db` مُستثنيان في `.gitignore`.
+
+---
+
 ## 🩺 حل المشاكل (Troubleshooting)
 
 ### 1) البوت لا يعمل / DeepSeek usage = 0

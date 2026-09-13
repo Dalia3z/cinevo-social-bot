@@ -169,6 +169,18 @@ class PublishQueue:
         d["hashtags"] = _safe_json_list(d.get("hashtags"))
         return d
 
+    def get(self, content_id: int) -> Optional[Dict]:
+        """Return a single row by id, or None."""
+        try:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT * FROM content WHERE id = ?", (content_id,)
+                ).fetchone()
+            return self._row_to_dict(row) if row else None
+        except sqlite3.Error as exc:
+            logger.error("Failed to fetch content %s: %s", content_id, exc)
+            return None
+
     def find_by_title(self, title: str) -> Optional[Dict]:
         """Return the most recent row for a title (case-insensitive)."""
         try:
@@ -226,6 +238,27 @@ class PublishQueue:
         except sqlite3.Error as exc:
             logger.error("Failed to list titles: %s", exc)
             return []
+
+    def published_today(self) -> int:
+        """
+        Count rows marked `posted` since 00:00 UTC today.
+
+        Used to enforce CONTENT_DAILY_PUBLISH_LIMIT so the auto-publisher can
+        never flood the channel.
+        """
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        try:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT COUNT(*) AS n FROM content "
+                    "WHERE status = 'posted' AND updated_at LIKE ?",
+                    (f"{today}%",),
+                ).fetchone()
+            return int(row["n"]) if row else 0
+        except sqlite3.Error as exc:
+            logger.error("Failed to count today's posts: %s", exc)
+            # Fail SAFE: report the limit as reached so nothing is published.
+            return 10**9
 
 
 # --------------------------------------------------------------------------- #

@@ -18,6 +18,15 @@ python-dotenv>=1.0.0
 # QUORA_BROWSER_AUTOMATION=true. Uncomment to install:
 # selenium>=4.20.0
 
+# Short-form VIDEO system (content_auto.py / video_maker.py).
+# FFmpeg itself is a SYSTEM binary (apt-get install -y ffmpeg), not a pip
+# package. The Python deps below are optional helpers:
+#   * edge-tts  -> free AI voiceover for the videos.
+#   * Pillow    -> image helpers (optional; not required for text shorts).
+# Uncomment to install:
+# edge-tts>=6.1.0
+# Pillow>=10.0.0
+
 # Optional: only needed by the local helper `set_github_secrets.py`, which
 # encrypts and uploads the YouTube OAuth secrets to GitHub in one step.
 # Uncomment to install:

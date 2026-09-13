@@ -208,6 +208,64 @@ def cmd_stats(args) -> int:
         print(f"  {status:<8} {stats.get(status, 0)}")
     total = sum(stats.values())
     print(f"  {'TOTAL':<8} {total}")
+    print(f"\nPublished today: {publish_queue.published_today()}"
+          f" / {settings.content_daily_publish_limit}")
+    return 0
+
+
+def cmd_video(args) -> int:
+    """Render a queued package into an MP4 short (FFmpeg)."""
+    from video_maker import video_maker
+
+    row = publish_queue.get(args.id)
+    if not row:
+        logger.error("No content with id=%s.", args.id)
+        return 1
+
+    if not video_maker.available():
+        logger.error(
+            "FFmpeg (and/or a usable font) is not available. "
+            "Install FFmpeg to render videos."
+        )
+        return 1
+
+    out = video_maker.build(row, out_path=args.out or None)
+    if not out:
+        logger.error("Video render failed for id=%s.", args.id)
+        return 1
+
+    print(f"Video written: {out}")
+    if args.mark_ready:
+        publish_queue.set_status(args.id, "ready")
+        print(f"Marked id={args.id} as ready.")
+    return 0
+
+
+def cmd_publish(args) -> int:
+    """Publish a rendered video to YouTube (respects all safety gates)."""
+    from youtube_uploader import youtube_uploader
+
+    row = publish_queue.get(args.id)
+    if not row:
+        logger.error("No content with id=%s.", args.id)
+        return 1
+
+    if not args.video:
+        logger.error("--video PATH is required (the rendered MP4).")
+        return 1
+
+    if not youtube_uploader.can_publish():
+        logger.error(
+            "Publishing is blocked by a safety gate. Check CONTENT_ENABLED, "
+            "CONTENT_AUTO_PUBLISH, OAuth credentials and the daily limit."
+        )
+        return 1
+
+    url = youtube_uploader.publish(args.video, row, queue_id=args.id)
+    if not url:
+        logger.error("Publish failed for id=%s.", args.id)
+        return 1
+    print(f"Published: {url}")
     return 0
 
 
@@ -269,6 +327,21 @@ def build_parser() -> argparse.ArgumentParser:
     # stats
     p_stats = sub.add_parser("stats", help="Queue statistics.")
     p_stats.set_defaults(func=cmd_stats)
+
+    # video
+    p_vid = sub.add_parser("video", help="Render a queued package to MP4.")
+    p_vid.add_argument("id", type=int, help="Content id.")
+    p_vid.add_argument("--out", default="", help="Output MP4 path.")
+    p_vid.add_argument(
+        "--mark-ready", action="store_true", help="Mark as ready after render."
+    )
+    p_vid.set_defaults(func=cmd_video)
+
+    # publish
+    p_pub = sub.add_parser("publish", help="Publish a rendered video to YouTube.")
+    p_pub.add_argument("id", type=int, help="Content id.")
+    p_pub.add_argument("--video", required=True, help="Path to the rendered MP4.")
+    p_pub.set_defaults(func=cmd_publish)
 
     return parser
 

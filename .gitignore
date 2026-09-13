@@ -23,6 +23,10 @@ content_queue.db
 content_queue.db-wal
 content_queue.db-shm
 
+# Rendered short videos (large binaries; uploaded as CI artifacts instead)
+content_videos/
+*.mp4
+
 # PM2
 pm2-*.log
 *.pid

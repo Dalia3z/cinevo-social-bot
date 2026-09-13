@@ -1,0 +1,125 @@
+# ============================================================================
+# Cinevo Short-Form Content - Automated Video Pipeline
+# ============================================================================
+# Runs DAILY: generates a script (DeepSeek) -> renders a vertical short
+# (FFmpeg) -> optionally publishes it to YouTube Shorts.
+#
+# IMPORTANT (SECURITY):
+#   - NO real secrets are stored in this file.
+#   - All keys/tokens come from GitHub *repository secrets* at runtime.
+#
+# SAFETY GATES (all must be satisfied before anything is published):
+#   1. CONTENT_ENABLED=true          (kill-switch; default false)
+#   2. CONTENT_AUTO_PUBLISH=true     (explicit opt-in; default false)
+#   3. CONTENT_DAILY_PUBLISH_LIMIT   (default 1 per day)
+#   4. YouTube OAuth secrets present
+#
+# This workflow is COMPLETELY SEPARATE from `bot-cron.yml` (the reply bot).
+# It never touches the reply database, so it cannot affect existing replies.
+# ============================================================================
+
+name: Cinevo Content (auto video)
+
+on:
+  schedule:
+    # Daily at 15:00 UTC (~16:00 Morocco time). Adjust as you like.
+    - cron: "0 15 * * *"
+  workflow_dispatch: # Manual trigger from the Actions tab.
+    inputs:
+      no_publish:
+        description: "Render only (do NOT publish)"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry run (do nothing, just log)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  content:
+    name: Generate + render + publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # FFmpeg is a SYSTEM binary, not a pip package.
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Optional voiceover engine (safe to fail).
+          pip install edge-tts || true
+
+      # Restore the content queue so we don't regenerate the same titles and
+      # so the daily publish counter survives between runs.
+      - name: Restore content queue from cache
+        id: queue-cache
+        uses: actions/cache@v4
+        with:
+          path: content_queue.db
+          key: content-queue-${{ github.run_id }}
+          restore-keys: |
+            content-queue-
+
+      - name: Run content pipeline
+        env:
+          # --- Kill-switches (set these as repo VARIABLES) ---
+          CONTENT_ENABLED: ${{ vars.CONTENT_ENABLED }}
+          CONTENT_AUTO_PUBLISH: ${{ vars.CONTENT_AUTO_PUBLISH }}
+          CONTENT_DAILY_PUBLISH_LIMIT: ${{ vars.CONTENT_DAILY_PUBLISH_LIMIT }}
+          CONTENT_PRIVACY: ${{ vars.CONTENT_PRIVACY }}
+          CONTENT_LANGUAGE: ${{ vars.CONTENT_LANGUAGE }}
+          CONTENT_POSTS_PER_DAY: ${{ vars.CONTENT_POSTS_PER_DAY }}
+          CONTENT_VOICE: ${{ vars.CONTENT_VOICE }}
+          CONTENT_ENABLE_VOICE: ${{ vars.CONTENT_ENABLE_VOICE }}
+
+          # --- Secrets ---
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_REFRESH_TOKEN }}
+          YOUTUBE_OAUTH_CLIENT_ID: ${{ secrets.YOUTUBE_OAUTH_CLIENT_ID }}
+          YOUTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRET }}
+
+          LOG_LEVEL: INFO
+        run: |
+          ARGS="--count 1"
+          if [ "${{ inputs.no_publish }}" = "true" ]; then
+            ARGS="$ARGS --no-publish"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          echo "Running: python content_auto.py $ARGS"
+          python content_auto.py $ARGS
+
+      - name: Upload rendered videos (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: content-videos-${{ github.run_id }}
+          path: content_videos/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Save content queue to cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: content_queue.db
+          key: content-queue-${{ github.run_id }}
