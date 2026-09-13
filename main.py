@@ -95,9 +95,24 @@ def _build_handlers() -> Dict[str, object]:
 # --------------------------------------------------------------------------- #
 # Anti-ban random delay
 # --------------------------------------------------------------------------- #
-def _anti_ban_delay() -> None:
-    """Sleep a random duration within the configured min/max range."""
+def _anti_ban_delay(deadline: Optional[float] = None) -> None:
+    """
+    Sleep a random duration within the configured min/max range.
+
+    If `deadline` (an absolute time.time() value) is given, the sleep is
+    capped so we never overshoot the runtime budget. This lets the bot exit
+    cleanly instead of being killed by GitHub Actions' `timeout-minutes`.
+    """
     delay = random.uniform(settings.min_delay_seconds, settings.max_delay_seconds)
+    if deadline is not None:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            logger.info("Runtime budget exhausted; skipping anti-ban delay.")
+            return
+        # Never sleep past the deadline. Leave a small safety margin, but
+        # never shrink a positive sleep to zero (that would defeat the
+        # anti-ban delay entirely when the budget is nearly spent).
+        delay = min(delay, max(1.0, remaining - 5))
     logger.info(
         "Anti-ban delay: sleeping %.0f seconds before next reply...", delay
     )
@@ -124,20 +139,34 @@ class EngagementBot:
         signal.signal(signal.SIGINT, _handle)
         signal.signal(signal.SIGTERM, _handle)
 
-    def run_once(self) -> int:
+    def run_once(self, max_runtime_seconds: Optional[int] = None) -> int:
         """
         Process one full cycle across all enabled platforms.
         Returns the number of replies posted.
+
+        `max_runtime_seconds` is a hard budget: once exceeded, the bot stops
+        starting new replies and returns, so the process exits CLEANLY before
+        an external timeout (e.g. GitHub Actions' `timeout-minutes`) kills it.
         """
+        deadline: Optional[float] = None
+        if max_runtime_seconds and max_runtime_seconds > 0:
+            deadline = time.time() + max_runtime_seconds
+            logger.info(
+                "Runtime budget: %ds (will stop starting new replies after that).",
+                max_runtime_seconds,
+            )
+
         total = 0
         for name, handler in self.handlers.items():
             try:
-                total += self._process_platform(name, handler)
+                total += self._process_platform(name, handler, deadline)
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Unexpected error in platform '%s': %s", name, exc)
         return total
 
-    def _process_platform(self, name: str, handler) -> int:
+    def _process_platform(
+        self, name: str, handler, deadline: Optional[float] = None
+    ) -> int:
         """Fetch and reply to new items for a single platform."""
         posted = 0
         try:
@@ -153,6 +182,15 @@ class EngagementBot:
         logger.info("[%s] Found %d new item(s) to handle.", name, len(items))
         for item in items:
             if self._stop:
+                break
+            # Stop starting new replies once the runtime budget is spent.
+            if deadline is not None and time.time() >= deadline:
+                logger.info(
+                    "[%s] Runtime budget reached; stopping after %d reply(ies). "
+                    "Remaining items will be handled in the next cycle.",
+                    name,
+                    posted,
+                )
                 break
             try:
                 if self.dry_run:
@@ -176,7 +214,8 @@ class EngagementBot:
                     if ok:
                         posted += 1
                         # Random delay between real posts to avoid bans.
-                        _anti_ban_delay()
+                        # Capped by the runtime budget so we exit cleanly.
+                        _anti_ban_delay(deadline)
             except Exception as exc:  # noqa: BLE001
                 logger.exception(
                     "Failed to process item %s on '%s': %s",
@@ -269,7 +308,7 @@ def main() -> None:
                 )
 
     if args.once:
-        posted = bot.run_once()
+        posted = bot.run_once(max_runtime_seconds=settings.max_runtime_seconds)
         logger.info("Single cycle finished. Replies posted: %d", posted)
         sys.exit(0)
 

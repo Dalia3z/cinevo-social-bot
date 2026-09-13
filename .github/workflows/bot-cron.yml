@@ -43,7 +43,10 @@ jobs:
   run-bot:
     name: Run bot (single cycle)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Hard cap for the whole job. The bot itself stops earlier via
+    # MAX_RUNTIME_SECONDS (default 780s = 13 min) and exits cleanly, so this
+    # timeout is only a last-resort safety net (never hit in normal runs).
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -177,6 +180,9 @@ jobs:
           POLL_INTERVAL_SECONDS: ${{ vars.POLL_INTERVAL_SECONDS }}
           MAX_COMMENTS_PER_CYCLE: ${{ vars.MAX_COMMENTS_PER_CYCLE }}
           MAX_COMMENTS_PER_VIDEO: ${{ vars.MAX_COMMENTS_PER_VIDEO }}
+          # Stop starting new replies after this many seconds and exit cleanly
+          # (must stay BELOW the job's timeout-minutes).
+          MAX_RUNTIME_SECONDS: ${{ vars.MAX_RUNTIME_SECONDS }}
           # --- Targets / DB / logging ---
           TARGETS_FILE: targets.json
           MAX_TARGETS_PER_PLATFORM: ${{ vars.MAX_TARGETS_PER_PLATFORM }}

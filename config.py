@@ -205,11 +205,13 @@ class Settings:
     # Behaviour / anti-ban tuning
     # ------------------------------------------------------------------ #
     # Random delay range (seconds) between consecutive replies.
+    # Kept short enough that several replies fit inside the runtime budget
+    # (MAX_RUNTIME_SECONDS) while still looking human / avoiding bans.
     min_delay_seconds: float = field(
-        default_factory=lambda: _get_float("MIN_DELAY_SECONDS", 180)  # 3 min
+        default_factory=lambda: _get_float("MIN_DELAY_SECONDS", 60)  # 1 min
     )
     max_delay_seconds: float = field(
-        default_factory=lambda: _get_float("MAX_DELAY_SECONDS", 420)  # 7 min
+        default_factory=lambda: _get_float("MAX_DELAY_SECONDS", 150)  # 2.5 min
     )
     # Warm-up: for the first N replies the bot posts GENUINE comments with NO
     # website link. YouTube holds replies from brand-new channels for review
@@ -221,6 +223,14 @@ class Settings:
     # How often (seconds) the main loop polls each platform.
     poll_interval_seconds: int = field(
         default_factory=lambda: _get_int("POLL_INTERVAL_SECONDS", 300)
+    )
+    # Hard runtime budget (seconds) for a single `--once` cycle. The bot stops
+    # starting new replies once this budget is exhausted and exits CLEANLY,
+    # instead of being killed by GitHub Actions' `timeout-minutes` (which shows
+    # up as "Error: The operation was canceled." and loses the run summary).
+    # Default 780s (13 min) leaves ~2 min of headroom under a 15-min job limit.
+    max_runtime_seconds: int = field(
+        default_factory=lambda: _get_int("MAX_RUNTIME_SECONDS", 780)
     )
     # Max comments to fetch per platform per cycle.
     max_comments_per_cycle: int = field(
