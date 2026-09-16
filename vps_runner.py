@@ -71,6 +71,7 @@ from config import settings
 from content_generator import content_generator
 from content_planner import content_planner
 from publish_queue import publish_queue
+from stock_source import stock_source
 from trailer_downloader import trailer_downloader
 from video_composer import video_composer
 from video_maker import video_maker
@@ -95,8 +96,14 @@ class VpsRunner:
             return "TRAILER_ENABLED is false."
         if not settings.content_enabled:
             return "CONTENT_ENABLED is false."
-        if not trailer_downloader.available():
-            return "yt-dlp is not available."
+        # A source is required: either the YouTube trailer path (yt-dlp) or
+        # the royalty-free stock path (an API key). Stock is preferred when
+        # configured because it is licence-clean and never IP-blocked.
+        if not stock_source.available() and not trailer_downloader.available():
+            return (
+                "No video source available: set STOCK_ENABLED=true with a "
+                "STOCK_PEXELS_API_KEY/STOCK_PIXABAY_API_KEY, or install yt-dlp."
+            )
         if not clip_processor.available():
             return "FFmpeg is not available."
         if not video_composer.available():
@@ -168,6 +175,36 @@ class VpsRunner:
 
         logger.warning("No trailer source found for '%s'.", title)
         return None
+
+    def _resolve_stock_clips(self, title: str) -> List[Path]:
+        """
+        Download royalty-free stock clips for `title`.
+
+        Returns a list of clip paths (possibly empty). Unlike the trailer
+        path this yields SEVERAL clips, which is what the composer wants:
+        a Short built from 5 different shots looks far more intentional than
+        one trailer cut into pieces.
+
+        Stock footage is licence-clean (no Content ID risk) and the CDNs do
+        not bot-block datacenter IPs, so this is the preferred source.
+        """
+        if not stock_source.available():
+            return []
+
+        count = max(1, int(getattr(settings, "stock_clips_per_video", 5)))
+        logger.info("Fetching %d stock clip(s) for '%s'...", count, title)
+        try:
+            clips = stock_source.fetch_for_title(title, count=count)
+        except Exception as exc:  # noqa: BLE001 - never let a source break a run
+            logger.warning("Stock fetch failed for '%s': %s", title, exc)
+            return []
+
+        paths = [c.path for c in clips if c.path.is_file()]
+        if paths:
+            logger.info("Stock source supplied %d clip(s) for '%s'.", len(paths), title)
+        else:
+            logger.warning("Stock source returned no clips for '%s'.", title)
+        return paths
 
     # ------------------------------------------------------------------ #
     # Voiceover
@@ -251,14 +288,31 @@ class VpsRunner:
             logger.error("Script generation failed for '%s'.", title)
             return False
 
-        # 2) Source trailer ---------------------------------------------
-        source = self._resolve_source(title)
-        if not source:
-            logger.warning("No trailer for '%s'; skipping.", title)
-            return False
+        # 2) Source footage ---------------------------------------------
+        # Stock footage is preferred: it is licence-clean (zero Content ID
+        # risk) and its CDNs never bot-block a datacenter IP. The YouTube
+        # trailer path is the fallback for when no stock key is configured.
+        source: Optional[Path] = None
+        clips = []
+
+        stock_clips = self._resolve_stock_clips(title)
+        if stock_clips:
+            logger.info("Using stock footage for '%s'.", title)
+            for clip_path in stock_clips:
+                # One transformed clip per stock clip: the stock clip IS the
+                # shot, so asking for `trailer_clips_per_video` cuts from each
+                # would multiply the count by the number of stock clips.
+                produced = clip_processor.process(clip_path, count=1)
+                if produced:
+                    clips.extend(produced)
+        else:
+            source = self._resolve_source(title)
+            if not source:
+                logger.warning("No source footage for '%s'; skipping.", title)
+                return False
+            clips = clip_processor.process(source)
 
         # 3) Clips -------------------------------------------------------
-        clips = clip_processor.process(source)
         if not clips:
             logger.warning(
                 "No clips produced for '%s'; falling back to text-only video.", title
@@ -290,7 +344,10 @@ class VpsRunner:
             return self._fallback_text_video(pkg)
 
         # 5) Queue + publish --------------------------------------------
-        if getattr(settings, "trailer_attribution", True):
+        # Attribution is only meaningful for the YouTube trailer path (where
+        # the footage belongs to a studio). Stock footage is licence-clean and
+        # needs no credit, so we skip it there.
+        if source is not None and getattr(settings, "trailer_attribution", True):
             source_url = ""
             try:
                 import json

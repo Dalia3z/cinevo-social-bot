@@ -41,7 +41,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 try:  # Windows consoles are cp1252 by default; keep logs readable.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -84,21 +84,71 @@ USER_AGENT = (
 #: "Sign in to confirm you're not a bot". Passing a Netscape-format cookies.txt
 #: exported from a logged-in browser is the standard, reliable workaround.
 #: Set TRAILER_COOKIES_FILE in .env to enable it.
+#:
+#: IMPORTANT: cookies are a *last resort*, not the default. In practice a
+#: cookies.txt exported from a browser session that does not match the VPS
+#: IP/region makes things WORSE: YouTube answers every player request with
+#: "The page needs to be reloaded" or returns storyboard-only formats, while
+#: the same request without cookies succeeds. So we first try the anonymous
+#: clients (which work fine from most VPS IPs) and only fall back to cookies
+#: when every anonymous client has failed.
 COOKIES_FILE = os.getenv("TRAILER_COOKIES_FILE", "").strip()
 
 #: Optional: route yt-dlp through a proxy (e.g. a residential proxy) when the
 #: VPS IP is blocked outright. Set TRAILER_PROXY in .env to enable it.
 PROXY_URL = os.getenv("TRAILER_PROXY", "").strip()
 
+#: Player clients tried in order. The first three need no authentication and
+#: are the ones that actually serve real video streams from a datacenter IP.
+#: `web_safari`/`mweb` are kept as a middle tier because they sometimes work
+#: when the others are rate-limited. The final entry re-tries the default
+#: client *with* cookies, which is the only place cookies are used.
+PLAYER_CLIENTS: List[str] = [
+    "android",
+    "tv_embedded",
+    "ios",
+    "web_safari",
+    "mweb",
+]
 
-def _auth_args() -> List[str]:
-    """Build the yt-dlp auth-related flags shared by probe and download."""
+
+def _auth_args(use_cookies: bool = False) -> List[str]:
+    """
+    Build the yt-dlp auth-related flags shared by probe and download.
+
+    Cookies are only attached when ``use_cookies`` is true, so the anonymous
+    attempts stay anonymous. A proxy, when configured, is always applied.
+    """
     args: List[str] = []
-    if COOKIES_FILE and Path(COOKIES_FILE).is_file():
+    if use_cookies and COOKIES_FILE and Path(COOKIES_FILE).is_file():
         args += ["--cookies", COOKIES_FILE]
     if PROXY_URL:
         args += ["--proxy", PROXY_URL]
     return args
+
+
+def _client_args(client: Optional[str]) -> List[str]:
+    """Build the ``--extractor-args`` flag selecting a YouTube player client."""
+    if not client:
+        return []
+    return ["--extractor-args", f"youtube:player_client={client}"]
+
+
+def _attempt_plan() -> List[Tuple[Optional[str], bool]]:
+    """
+    Return the ordered list of ``(player_client, use_cookies)`` attempts.
+
+    Anonymous clients come first. Cookies are appended as a final attempt only
+    when a cookies file is actually configured, so a broken cookies file can
+    never prevent the working anonymous path from being used.
+    """
+    plan: List[Tuple[Optional[str], bool]] = [
+        (client, False) for client in PLAYER_CLIENTS
+    ]
+    plan.append((None, False))  # yt-dlp's own default client, no cookies
+    if COOKIES_FILE and Path(COOKIES_FILE).is_file():
+        plan.append((None, True))  # last resort: default client + cookies
+    return plan
 
 
 def _safe_name(text: str, max_len: int = 80) -> str:
@@ -293,40 +343,56 @@ class TrailerDownloader:
                 return hit
 
         out_tmpl = str(self.clips_dir / f"{stem}.%(ext)s")
-        cmd = [
-            *ytdlp.split(),
-            "--no-playlist",
-            "--no-warnings",
-            "--no-progress",
-            "--max-filesize", MAX_FILESIZE,
-            "--match-filter", f"duration<={MAX_DURATION_SECONDS}",
-            "--format", FORMAT_SELECTOR,
-            "--merge-output-format", "mp4",
-            "--user-agent", USER_AGENT,
-            *_auth_args(),
-            "--output", out_tmpl,
-            "--print", "after_move:filepath",
-            url,
-        ]
 
         logger.info("Downloading trailer: %s", url)
-        try:
-            proc = subprocess.run(
-                cmd, capture_output=True, text=True,
-                timeout=settings.trailer_download_timeout,
-            )
-        except subprocess.TimeoutExpired:
-            logger.error("Trailer download timed out after %ss: %s",
-                         settings.trailer_download_timeout, url)
-            return None
-        except (OSError, subprocess.SubprocessError) as exc:
-            logger.error("yt-dlp failed to start: %s", exc)
-            return None
+        last_error = "unknown error"
+        downloaded = False
 
-        if proc.returncode != 0:
+        # Try each (client, cookies) combination until one yields a file.
+        # Anonymous clients are attempted first; cookies are a last resort.
+        for client, use_cookies in _attempt_plan():
+            cmd = [
+                *ytdlp.split(),
+                "--no-playlist",
+                "--no-warnings",
+                "--no-progress",
+                "--max-filesize", MAX_FILESIZE,
+                "--match-filter", f"duration<={MAX_DURATION_SECONDS}",
+                "--format", FORMAT_SELECTOR,
+                "--merge-output-format", "mp4",
+                "--user-agent", USER_AGENT,
+                *_client_args(client),
+                *_auth_args(use_cookies),
+                "--output", out_tmpl,
+                "--print", "after_move:filepath",
+                url,
+            ]
+            label = f"client={client or 'default'} cookies={use_cookies}"
+            try:
+                proc = subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    timeout=settings.trailer_download_timeout,
+                )
+            except subprocess.TimeoutExpired:
+                last_error = f"timed out after {settings.trailer_download_timeout}s"
+                logger.warning("Attempt failed (%s): %s", label, last_error)
+                continue
+            except (OSError, subprocess.SubprocessError) as exc:
+                last_error = f"yt-dlp failed to start: {exc}"
+                logger.warning("Attempt failed (%s): %s", label, last_error)
+                continue
+
+            if proc.returncode == 0:
+                logger.info("Download succeeded (%s)", label)
+                downloaded = True
+                break
+
             tail = (proc.stderr or proc.stdout or "").strip().splitlines()
-            logger.error("yt-dlp exited %s: %s", proc.returncode,
-                         tail[-1] if tail else "unknown error")
+            last_error = tail[-1] if tail else "unknown error"
+            logger.warning("Attempt failed (%s): %s", label, last_error)
+
+        if not downloaded:
+            logger.error("All download attempts failed for %s: %s", url, last_error)
             return None
 
         video = self._video_path(stem)
@@ -369,7 +435,7 @@ class TrailerDownloader:
             *ytdlp.split(),
             "--no-playlist", "--no-warnings", "--skip-download",
             "--dump-single-json", "--user-agent", USER_AGENT,
-            *_auth_args(), url,
+            *_auth_args(False), url,
         ]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -395,7 +461,7 @@ class TrailerDownloader:
             f"ytsearch{limit}:{query}",
             "--no-playlist", "--no-warnings", "--skip-download",
             "--dump-json", "--user-agent", USER_AGENT,
-            *_auth_args(),
+            *_auth_args(False),
         ]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)

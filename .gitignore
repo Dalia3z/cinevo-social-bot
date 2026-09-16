@@ -4,6 +4,12 @@
 
 # Secrets - NEVER commit your real .env file
 .env
+.env.*
+!.env.example
+
+# Authenticated browser cookies (YouTube session) - NEVER commit
+cookies.txt
+*_cookies.txt
 
 # Python
 __pycache__/
@@ -30,6 +36,7 @@ content_videos/
 # VPS trailer pipeline (large binaries; never commit these)
 trailer_clips/
 trailer_output/
+stock_clips/
 .compose_work/
 *.mp3
 *.m4a

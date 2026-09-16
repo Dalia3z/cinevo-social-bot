@@ -97,6 +97,22 @@ def _find_ffmpeg() -> Optional[str]:
     return None
 
 
+def _find_ffprobe() -> Optional[str]:
+    """Locate the ffprobe binary (PATH first, then common install spots)."""
+    found = shutil.which("ffprobe")
+    if found:
+        return found
+    for candidate in (
+        r"C:\ffmpeg\bin\ffprobe.exe",
+        r"C:\Program Files\ffmpeg\bin\ffprobe.exe",
+        "/usr/bin/ffprobe",
+        "/usr/local/bin/ffprobe",
+    ):
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def _escape_drawtext(text: str) -> str:
     """
     Escape a string for FFmpeg's drawtext filter.
@@ -214,6 +230,38 @@ class VideoComposer:
     # ------------------------------------------------------------------ #
     # Overlay + audio
     # ------------------------------------------------------------------ #
+    def _has_audio(self, path: Path) -> bool:
+        """
+        True when `path` contains at least one audio stream.
+
+        This matters because stock footage is usually VIDEO-ONLY: Pexels and
+        Pixabay clips have no audio track at all. The composer used to assume
+        the joined video always had an audio bed (`[0:a]`), which made ffmpeg
+        fail with "Stream specifier ':a' ... matches no streams" and silently
+        drop the whole composition to the text-only fallback.
+        """
+        ffprobe = _find_ffprobe()
+        if not ffprobe:
+            # Without ffprobe we cannot know; assume no audio so we never
+            # reference a stream that may not exist.
+            return False
+        cmd = [
+            ffprobe,
+            "-hide_banner",
+            "-loglevel", "error",
+            "-select_streams", "a",
+            "-show_entries", "stream=index",
+            "-of", "csv=p=0",
+            str(path),
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        except subprocess.SubprocessError:
+            return False
+        if result.returncode != 0:
+            return False
+        return bool((result.stdout or "").strip())
+
     def _overlay_filter(self, hook: str) -> str:
         """Build the drawtext chain for the hook + brand watermark."""
         parts: List[str] = []
@@ -333,7 +381,13 @@ class VideoComposer:
         ]
         cmd += audio_inputs
 
-        if audio_filter:
+        # Stock footage (Pexels/Pixabay) is VIDEO-ONLY, so the joined file may
+        # have no audio stream at all. Referencing `[0:a]` unconditionally made
+        # ffmpeg abort with "Stream specifier ':a' ... matches no streams" and
+        # the whole composition silently fell back to a text-only video.
+        joined_has_audio = self._has_audio(joined)
+
+        if audio_filter and joined_has_audio:
             # Keep the trailer's own audio at a low bed level and mix in the
             # voiceover / music on top.
             filter_complex = (
@@ -345,6 +399,13 @@ class VideoComposer:
                 "-filter_complex", filter_complex,
                 "-map", "0:v:0",
                 "-map", "[aout]",
+            ]
+        elif audio_filter:
+            # No bed to mix with: the voiceover/music IS the soundtrack.
+            cmd += [
+                "-filter_complex", audio_filter,
+                "-map", "0:v:0",
+                "-map", "[amixout]",
             ]
         else:
             cmd += ["-map", "0:v:0", "-map", "0:a?"]

@@ -388,6 +388,47 @@ class Settings:
         default_factory=lambda: _get_str("TRAILER_PROXY", "")
     )
 
+    # ------------------------------------------------------------------ #
+    # Stock footage source (YouTube-independent)
+    # ------------------------------------------------------------------ #
+    # YouTube aggressively bot-blocks datacenter IPs, so the trailer
+    # pipeline can instead build videos from ROYALTY-FREE stock footage.
+    # This is 100% licence-clean (no Content ID risk at all) and the CDNs
+    # do not block VPS IPs.
+    #
+    # Pexels is the primary provider: free API key, generous rate limit,
+    # direct MP4 CDN links. Get a key at https://www.pexels.com/api/
+    stock_enabled: bool = field(
+        default_factory=lambda: _get_bool("STOCK_ENABLED", False)
+    )
+    stock_pexels_api_key: str = field(
+        default_factory=lambda: _get_str("STOCK_PEXELS_API_KEY", "")
+    )
+    # Pixabay is the secondary provider (also free, also direct CDN).
+    # Get a key at https://pixabay.com/api/docs/
+    stock_pixabay_api_key: str = field(
+        default_factory=lambda: _get_str("STOCK_PIXABAY_API_KEY", "")
+    )
+    # Where downloaded stock clips are cached (git-ignored).
+    stock_clips_dir: str = field(
+        default_factory=lambda: _get_str("STOCK_CLIPS_DIR", "stock_clips")
+    )
+    # Timeout (seconds) for a single stock clip download.
+    stock_download_timeout: int = field(
+        default_factory=lambda: _get_int("STOCK_DOWNLOAD_TIMEOUT", 300)
+    )
+    # Cap on a single stock clip so a rogue 4K file cannot fill the disk.
+    stock_max_filesize_mb: int = field(
+        default_factory=lambda: _get_int("STOCK_MAX_FILESIZE_MB", 80)
+    )
+    # How many stock clips to download per video.
+    stock_clips_per_video: int = field(
+        default_factory=lambda: _get_int("STOCK_CLIPS_PER_VIDEO", 5)
+    )
+    # Comma separated search terms used when a title has no obvious theme.
+    # Keeps the footage varied across runs.
+    stock_default_queries: List[str] = field(default_factory=list)
+
     # Master kill-switch for the whole bot.
     bot_enabled: bool = field(
         default_factory=lambda: _get_bool("BOT_ENABLED", True)
@@ -451,6 +492,9 @@ class Settings:
             os.getenv("TRAILER_SOURCE_URLS", "")
         )
         self.trailer_titles = self._split_list(os.getenv("TRAILER_TITLES", ""))
+        self.stock_default_queries = self._split_list(
+            os.getenv("STOCK_DEFAULT_QUERIES", "")
+        )
 
     @staticmethod
     def _split_list(raw: Optional[str]) -> List[str]:
